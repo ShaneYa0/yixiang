@@ -344,39 +344,55 @@ export function calculateSingleMarriage(input: SingleMarriageInput): SingleMarri
   const spouseStars = gender === "male" ? ["正财", "偏财"] : ["正官", "七杀"];
 
   // ---- 1. 婚姻宫分析 ----
-  const palaceParts: string[] = [];
-  const palaceIssues: string[] = [];
   const palaceGood: string[] = [];
+  const palaceIssues: string[] = [];
   let hasPalaceIssue = false;
+
+  // 去重：用 Set 追踪已报告的冲/害/合类型
+  const reportedClashes = new Set<string>();
+  const reportedHarms = new Set<string>();
+  const reportedHarmonies = new Set<string>();
 
   const otherBranches = pillars.filter((_, i) => i !== 2).map((p) => p.ganZhi[1]);
   for (const branch of otherBranches) {
     const key = dayBranch + branch;
-    if (earthlyBranchClash.has(key)) {
+    if (earthlyBranchClash.has(key) && !reportedClashes.has(branch)) {
       hasPalaceIssue = true;
-      palaceIssues.push(`${dayBranch}${branch}六冲，婚姻宫受冲，感情中易有外部变动或内部情绪波动`);
+      reportedClashes.add(branch);
+      palaceIssues.push(`与${branch}六冲，感情中易有外部变动或内部情绪波动`);
     }
-    if (earthlyBranchHarm.has(key)) {
+    if (earthlyBranchHarm.has(key) && !reportedHarms.has(branch)) {
       hasPalaceIssue = true;
-      palaceIssues.push(`${dayBranch}${branch}六害，婚姻宫有暗损之象，需在相处中注意细节摩擦`);
+      reportedHarms.add(branch);
+      palaceIssues.push(`与${branch}六害，需在相处中注意细节摩擦`);
     }
-    if (earthlyBranchHarmony[key]) {
-      palaceGood.push(`${dayBranch}${branch}六合，婚姻宫得合，关系根基稳固`);
+    if (earthlyBranchHarmony[key] && !reportedHarmonies.has(branch)) {
+      reportedHarmonies.add(branch);
+      palaceGood.push(`与${branch}六合，关系根基稳固`);
     }
   }
 
   if (branchHasStar(dayPillar.hiddenTenGods, spouseStars)) {
-    palaceGood.push("配偶星藏于日支，正缘得位，婚姻根基扎实");
+    palaceGood.push("配偶星藏于日支，正缘得位");
   }
 
-  palaceParts.push(`日支为${dayBranch}，属${dayPillar.element}，此为配偶宫所在。`);
-  if (palaceGood.length > 0) palaceParts.push(palaceGood.join("。"));
-  if (palaceIssues.length > 0) palaceParts.push(palaceIssues.join("。"));
+  const palaceLines: string[] = [];
+  palaceLines.push(`日支${dayBranch} · 属${dayPillar.element} · 此为配偶宫`);
 
-  const palaceText = palaceParts.join("\n");
+  if (palaceGood.length > 0) {
+    palaceLines.push(palaceGood.map((g) => `✓ ${g}`).join("\n"));
+  }
+  if (palaceIssues.length > 0) {
+    palaceLines.push(palaceIssues.map((i) => `△ ${i}`).join("\n"));
+  }
+  if (palaceGood.length === 0 && palaceIssues.length === 0) {
+    palaceLines.push("婚姻宫无冲无合，平和稳定");
+  }
+
+  const palaceText = palaceLines.join("\n");
 
   // ---- 2. 配偶星分析 ----
-  const starParts: string[] = [];
+  const starItems: string[] = [];
   let stemCount = 0;
   let branchCount = 0;
 
@@ -384,7 +400,7 @@ export function calculateSingleMarriage(input: SingleMarriageInput): SingleMarri
     const p = pillars[i];
     if (stemHasStar(p.tenGod, spouseStars)) {
       stemCount++;
-      starParts.push(`${p.label}天干透出${p.tenGod}`);
+      starItems.push(`${p.label}透${p.tenGod}`);
     }
     if (branchHasStar(p.hiddenTenGods, spouseStars)) {
       branchCount++;
@@ -392,23 +408,23 @@ export function calculateSingleMarriage(input: SingleMarriageInput): SingleMarri
   }
 
   if (stemCount >= 2) {
-    starParts.push("配偶星双透干，异性缘旺，正缘信号明显，感情经历可能较为丰富。需注意在多个选择中保持清醒。");
+    starItems.push("配偶星双透 · 异性缘旺，正缘信号明显");
   } else if (stemCount === 1) {
-    starParts.push("配偶星透干一位，正缘清晰，感情目标明确。传统上认为一星透干是最佳配置——不多不少，方向明确。");
+    starItems.push("配偶星一位透干 · 正缘清晰，方向明确");
   } else if (branchCount > 0) {
-    starParts.push("配偶星藏于地支而未透干，缘分稍隐，需耐心等待时机或大运流年的引动。不代表没有好姻缘，只是节奏偏缓。");
+    starItems.push("配偶星藏于地支 · 缘分稍隐，节奏偏缓");
   } else {
-    starParts.push("配偶星在原局不显，姻缘需要更多主动社交和大运流年的引动。不必焦虑——很多晚婚的命局恰恰在合适的大运阶段遇到了最好的缘分。");
+    starItems.push("配偶星不显 · 需主动社交，等待大运引动");
   }
 
   if (branchHasStar(dayPillar.hiddenTenGods, spouseStars)) {
-    starParts.push("配偶星坐日支（配偶宫），此为「正星坐正位」，婚后关系稳定，配偶得力。");
+    starItems.push("配偶星坐日支 · 正星坐正位，婚后稳固");
   }
 
-  const starText = starParts.join("\n");
+  const starText = starItems.map((s) => `· ${s}`).join("\n");
 
   // ---- 3. 桃花运分析 ----
-  const romanceParts: string[] = [];
+  const romanceLines: string[] = [];
   const peachBranch = peachBlossomMap[dayBranch] ?? peachBlossomMap[zodiacToBranch(zodiac)];
   let peachCount = 0;
   const peachPillars: string[] = [];
@@ -421,27 +437,29 @@ export function calculateSingleMarriage(input: SingleMarriageInput): SingleMarri
   }
 
   if (peachCount >= 2) {
-    romanceParts.push(`桃花星${peachBranch}在${peachPillars.join("、")}出现${peachCount}次，异性缘较旺，感情机遇多。但桃花多也意味着需要更多定力来专注于一段关系。`);
+    romanceLines.push(`桃花星在${peachPillars.join("、")} · 较旺，感情机遇多`);
   } else if (peachCount === 1) {
-    romanceParts.push(`桃花星${peachBranch}在${peachPillars[0]}出现，有适度的吸引力和感情机遇，不会过多也不至缺失。`);
+    romanceLines.push(`桃花星在${peachPillars[0]} · 适度，不过不失`);
   } else {
-    romanceParts.push(`桃花星${peachBranch}未在四柱中显现，感情发展偏理性克制，不太容易一见钟情。适合通过共同兴趣和长期相处来培养感情。`);
+    romanceLines.push(`桃花星未显 · 理性克制，适合慢热发展`);
   }
 
   const peachPillar = pillars.find((p) => p.ganZhi[1] === peachBranch);
   if (peachPillar && (stemHasStar(peachPillar.tenGod, spouseStars) || branchHasStar(peachPillar.hiddenTenGods, spouseStars))) {
-    romanceParts.push("桃花与配偶星同柱，这是极佳的信号——感情机遇容易导向稳定关系，而非短暂的激情。");
+    romanceLines.push("桃花与配偶星同柱 · 机遇易导向稳定关系");
   }
 
+  let peachClashed = false;
   for (const p of pillars) {
     const key = peachBranch + p.ganZhi[1];
     if (earthlyBranchClash.has(key)) {
-      romanceParts.push(`桃花星${peachBranch}被冲，感情机遇有反复之象。可能遇到合适的人但时机不对，或感情刚有苗头就遭遇外部变动。建议在感情初期保持耐心，不急于下结论。`);
+      romanceLines.push("桃花星被冲 · 感情机遇有反复，建议不急于下结论");
+      peachClashed = true;
       break;
     }
   }
 
-  const romanceText = romanceParts.join("\n");
+  const romanceText = `桃花位：${peachBranch}\n${romanceLines.map((l) => `· ${l}`).join("\n")}`;
 
   // ---- 缘型判定 ----
   const hasClearSpouseStar = stemCount >= 1;

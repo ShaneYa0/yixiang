@@ -27,6 +27,37 @@ type Props = {
   result: PairResult | SoloResult;
 };
 
+/** 渲染结构化文本：每行按前缀自动着色 */
+function DetailText({ text }: { text: string }) {
+  const lines = text.split("\n").filter(Boolean);
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {lines.map((line, i) => {
+        const isGood = line.startsWith("✓");
+        const isCaution = line.startsWith("△");
+        const isBullet = line.startsWith("·");
+        const isLabel = line.includes("：") && !isBullet && !isGood && !isCaution;
+
+        return (
+          <div
+            key={i}
+            className={`text-[13px] leading-6 ${
+              isGood
+                ? "text-emerald-700 dark:text-emerald-400"
+                : isCaution
+                  ? "text-amber-700 dark:text-amber-400"
+                  : "text-ink-light"
+            } ${isBullet ? "pl-3" : ""} ${isLabel ? "font-medium text-ink dark:text-paper" : ""}`}
+          >
+            {line}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function MarriageResult({ mode, result }: Props) {
   if (mode === "solo") {
     const r = result as SoloResult;
@@ -38,10 +69,12 @@ export function MarriageResult({ mode, result }: Props) {
             <div className="text-2xl font-light tracking-[0.2em] text-ink dark:text-paper">
               {r.yuanType}
             </div>
-            <div className="mt-3 grid gap-1 text-[13px] leading-7 text-ink-light sm:grid-cols-3">
-              <span>日主：{r.person.dayMaster}</span>
-              <span>五行：{r.person.dominantElement}</span>
-              <span>生肖：{r.person.zodiac}</span>
+            <div className="mt-3 flex items-center justify-center gap-5 text-[13px] text-ink-light">
+              <span>日主 <span className="text-ink dark:text-paper">{r.person.dayMaster}</span></span>
+              <span className="text-divider">|</span>
+              <span>五行 <span className="text-ink dark:text-paper">{r.person.dominantElement}</span></span>
+              <span className="text-divider">|</span>
+              <span>生肖 <span className="text-ink dark:text-paper">{r.person.zodiac}</span></span>
             </div>
             <p className="mt-4 text-[13px] leading-7 text-ink-light">{r.summary}</p>
           </div>
@@ -55,9 +88,7 @@ export function MarriageResult({ mode, result }: Props) {
             return (
               <Card key={key}>
                 <SectionTitle>{soloLabels[key]}</SectionTitle>
-                <div className="mt-2 whitespace-pre-line text-[13px] leading-7 text-ink-light">
-                  {detail.text}
-                </div>
+                <DetailText text={detail.text} />
               </Card>
             );
           })}
@@ -67,10 +98,10 @@ export function MarriageResult({ mode, result }: Props) {
         {r.timing && (
           <Card>
             <SectionTitle>正缘时机</SectionTitle>
-            <p className="mt-2 text-[13px] leading-7 text-ink-light">{r.timing.text}</p>
+            <DetailText text={r.timing.text} />
             <div className="mt-3 flex flex-wrap gap-2">
               {r.timing.bestYears.map((y) => (
-                <span key={y} className="border border-divider px-2 py-1 text-[11px] text-ink-light">
+                <span key={y} className="border border-divider px-2.5 py-1 text-[12px] text-ink-light">
                   {y} 年
                 </span>
               ))}
@@ -82,8 +113,10 @@ export function MarriageResult({ mode, result }: Props) {
         {r.spousePortrait && (
           <Card>
             <SectionTitle>配偶画像</SectionTitle>
-            <p className="mt-2 text-[13px] leading-7 text-ink-light">{r.spousePortrait.text}</p>
-            <div className="mt-2 text-[11px] text-ink-fade">五行属性：{r.spousePortrait.element}</div>
+            <DetailText text={r.spousePortrait.text} />
+            <div className="mt-2 inline-block border border-divider px-2 py-0.5 text-[11px] text-ink-fade">
+              五行：{r.spousePortrait.element}
+            </div>
           </Card>
         )}
       </div>
@@ -102,9 +135,17 @@ export function MarriageResult({ mode, result }: Props) {
           <div className="text-2xl font-light tracking-[0.2em] text-ink dark:text-paper">
             {r.yuanType}
           </div>
-          <div className="mt-3 grid gap-1 text-[13px] leading-7 text-ink-light sm:grid-cols-2">
-            <span>{personA.name || "甲方"}：日主{personA.dayMaster} · {personA.dominantElement} · 肖{personA.zodiac}</span>
-            <span>{personB.name || "乙方"}：日主{personB.dayMaster} · {personB.dominantElement} · 肖{personB.zodiac}</span>
+          <div className="mt-3 flex items-center justify-center gap-5 text-[13px] text-ink-light">
+            <span>
+              {personA.name || "甲方"}：日主 <span className="text-ink dark:text-paper">{personA.dayMaster}</span>
+              {" · "}{personA.dominantElement} · 肖{personA.zodiac}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center justify-center gap-5 text-[13px] text-ink-light">
+            <span>
+              {personB.name || "乙方"}：日主 <span className="text-ink dark:text-paper">{personB.dayMaster}</span>
+              {" · "}{personB.dominantElement} · 肖{personB.zodiac}
+            </span>
           </div>
           <p className="mt-4 text-[13px] leading-7 text-ink-light">{r.summary}</p>
         </div>
@@ -118,9 +159,7 @@ export function MarriageResult({ mode, result }: Props) {
           return (
             <Card key={key}>
               <SectionTitle>{pairLabels[key]}</SectionTitle>
-              <div className="mt-2 whitespace-pre-line text-[13px] leading-7 text-ink-light">
-                {detail.text}
-              </div>
+              <DetailText text={detail.text} />
             </Card>
           );
         })}
