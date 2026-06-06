@@ -461,6 +461,136 @@ function analyzeMarriagePalace(
   return parts.join("\n");
 }
 
+// ========== 新辅助函数 ==========
+
+/** 筛选高权重姻缘神煞（只保留日柱/月柱 + 必列神煞类型） */
+function filterPriorityShenSha(items: ShenShaItem[]): {
+  primary: ShenShaItem[];   // 落在日柱的神煞（权重最高）
+  secondary: ShenShaItem[]; // 落在月柱的神煞
+  other: ShenShaItem[];     // 其他柱位但属于必列神煞类型
+} {
+  const alwaysShow = new Set(["天乙贵人", "红鸾", "天喜", "咸池", "孤辰", "寡宿", "孤鸾煞", "阴差阳错", "羊刃"]);
+
+  const primary = items.filter(s => s.position === "日柱" && alwaysShow.has(s.name));
+  const secondary = items.filter(s => s.position === "月柱" && alwaysShow.has(s.name));
+  const other = items.filter(s =>
+    s.position !== "日柱" && s.position !== "月柱" && alwaysShow.has(s.name)
+  );
+
+  // 补充：日柱/月柱上的非必列但仍有参考价值的神煞
+  const extraOnDay = items.filter(s => s.position === "日柱" && !alwaysShow.has(s.name));
+  const extraOnMonth = items.filter(s => s.position === "月柱" && !alwaysShow.has(s.name));
+
+  return {
+    primary: [...primary, ...extraOnDay],
+    secondary: [...secondary, ...extraOnMonth],
+    other,
+  };
+}
+
+/** 为单个引动年份生成详细解读 */
+function analyzeYearlyDetail(
+  year: number,
+  ganZhi: string,
+  dayStem: string,
+  dayBranch: string,
+  spouseStars: string[],
+  peachBranch: string,
+): { type: string; detail: string; advice: string } | null {
+  const yearStem = ganZhi[0];
+  const yearBranch = ganZhi[1];
+  const triggers: string[] = [];
+  const details: string[] = [];
+
+  // 桃花星引动
+  if (yearBranch === peachBranch) {
+    triggers.push("桃花到位");
+    details.push(`流年地支${yearBranch}落桃花位，这一年人际关系温度升高，容易被关注和靠近。`);
+  }
+
+  // 日支六合
+  if (LIU_HE[yearBranch] === dayBranch) {
+    triggers.push("合婚姻宫");
+    details.push(`流年${yearBranch}与日支${dayBranch}六合，婚姻宫被引动，关系容易在此年趋于稳定和深化。`);
+  }
+
+  // 日支六冲
+  if (LIU_CHONG[yearBranch] === dayBranch) {
+    triggers.push("冲婚姻宫");
+    details.push(`流年${yearBranch}与日支${dayBranch}六冲，婚姻宫被冲动，关系中可能出现重要变动或重新定义。`);
+  }
+
+  // 天干五合
+  const TIAN_GAN_HE: Record<string, string> = {
+    "甲": "己", "己": "甲", "乙": "庚", "庚": "乙", "丙": "辛", "辛": "丙",
+    "丁": "壬", "壬": "丁", "戊": "癸", "癸": "戊",
+  };
+  if (TIAN_GAN_HE[yearStem] === dayStem) {
+    triggers.push("天干五合");
+    details.push(`流年天干${yearStem}与日主${dayStem}五合，这一年人际吸引力自然提升，适合主动沟通。`);
+  }
+
+  // 三合
+  const SAN_HE: Record<string, string[]> = {
+    "申": ["子", "辰"], "子": ["申", "辰"], "辰": ["申", "子"],
+    "亥": ["卯", "未"], "卯": ["亥", "未"], "未": ["亥", "卯"],
+    "寅": ["午", "戌"], "午": ["寅", "戌"], "戌": ["寅", "午"],
+    "巳": ["酉", "丑"], "酉": ["巳", "丑"], "丑": ["巳", "酉"],
+  };
+  if (SAN_HE[yearBranch]?.includes(dayBranch)) {
+    triggers.push("三合日支");
+    details.push(`流年${yearBranch}与日支${dayBranch}成三合关系，感情中长期走向趋于明朗。`);
+  }
+
+  if (triggers.length === 0) return null;
+
+  const type = triggers.join("+");
+  const detail = details.join(" ");
+
+  // 基于引动类型生成建议
+  let advice = "";
+  if (triggers.includes("合婚姻宫")) {
+    advice = "适合推进关系承诺、讨论长期规划";
+  } else if (triggers.includes("冲婚姻宫")) {
+    advice = "变动中保持冷静，重大决定多给自己一些时间";
+  } else if (triggers.includes("桃花到位")) {
+    advice = "扩大社交圈，出现在对的场合，但不要急于下结论";
+  } else if (triggers.includes("天干五合")) {
+    advice = "适合主动沟通、修复或加深重要关系";
+  } else {
+    advice = "保持开放心态，顺势而为";
+  }
+
+  return { type, detail, advice };
+}
+
+/** 生成命理依据附录 */
+function buildAppendixBody(): string {
+  const rules = [
+    { rule: "天干五合", source: "《三命通会·论合》", note: "甲己合土、乙庚合金、丙辛合水、丁壬合木、戊癸合火" },
+    { rule: "地支六合", source: "《渊海子平》", note: "子丑合土、寅亥合木、卯戌合火、辰酉合金、巳申合水、午未合土" },
+    { rule: "地支六冲", source: "《渊海子平》", note: "子午冲、丑未冲、寅申冲、卯酉冲、辰戌冲、巳亥冲" },
+    { rule: "地支六害", source: "《三命通会》", note: "子未害、丑午害、寅巳害、卯辰害、申亥害、酉戌害" },
+    { rule: "十二长生", source: "《五行大义》", note: "长生、沐浴、冠带、临官、帝旺、衰、病、死、墓、绝、胎、养" },
+    { rule: "十神", source: "《子平真诠》", note: "正官、七杀、正财、偏财、正印、偏印、食神、伤官、比肩、劫财" },
+    { rule: "天乙贵人", source: "《三命通会》", note: "甲戊庚见丑未，乙己见子申，丙丁见亥酉，壬癸见卯巳，辛见午寅" },
+    { rule: "红鸾天喜", source: "《星平会海》", note: "以年支起红鸾，对宫为天喜" },
+    { rule: "咸池（桃花）", source: "《三命通会》", note: "申子辰在酉，寅午戌在卯，亥卯未在子，巳酉丑在午" },
+  ];
+
+  return [
+    "本报告基于以下传统命理规则进行推导，所有分析均有经典出处：",
+    "",
+    ...rules.map((r, i) => `${String(i + 1)}. **${r.rule}**（${r.source}）：${r.note}`),
+    "",
+    "---",
+    "",
+    "**免责声明**：八字命理分析属于传统文化范畴，报告内容仅供参考和反思，不构成对未来的确定性预测。",
+    "任何命理维度的好与不好，都不能替代个人在现实中的选择和经营。",
+    "每一段关系都是独一无二的——你们的经历、选择和努力比任何命理维度都重要。",
+  ].join("\n");
+}
+
 // ========== Main Build: Solo ==========
 
 export function buildSoloDeepReport(
