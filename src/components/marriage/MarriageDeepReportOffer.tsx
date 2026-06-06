@@ -1,79 +1,204 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
-import { SectionTitle } from "@/components/ui/SectionTitle";
+import { useRouter } from "next/navigation";
 
-const modules = ["合婚格局详解", "日柱深度分析", "大运同步推演", "财官互动精解", "相处模式建议", "关键年份提醒"];
-const deliverables = [
-  { value: "深度详批", label: "完整解读", note: "比基础合婚看得更深更细" },
-  { value: "命盘图解", label: "重点清晰", note: "双方四柱、五行、十神对比呈现" },
-  { value: "阶段指引", label: "大运流年", note: "看清不同阶段的相处重点" },
-  { value: "长期保存", label: "随时复看", note: "登录后可回到我的查看" },
+type AccountUser = {
+  isVip: boolean;
+};
+
+const plans = [
+  { label: "7天体验", price: "¥8.8", desc: "适合想先了解自己感情结构的朋友" },
+  { label: "月度会员", price: "¥18.8", desc: "短期内有感情疑问时随时查看" },
+  { label: "半年会员", price: "¥98.8", desc: "持续关注大运流年对感情的引动" },
+  { label: "年度会员", price: "¥158.8", desc: "长期跟踪感情节奏与关键时段变化" },
 ];
 
-export function MarriageDeepReportOffer({ mode }: { mode: "pair" | "solo" }) {
-  const title = mode === "pair" ? "合婚深度详批" : "姻缘深度详批";
+function PlanModal({ open, onClose, isLoggedIn }: { open: boolean; onClose: () => void; isLoggedIn: boolean }) {
+  const [selected, setSelected] = useState<string | null>(null);
+
+  if (!open) return null;
 
   return (
-    <Card className="border-ink/40 bg-card">
-      <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
-        <div>
-          <SectionTitle>{title}</SectionTitle>
-          <h3 className="mb-4 text-3xl font-thin leading-tight tracking-[0.12em] text-ink sm:text-4xl">
-            {mode === "pair"
-              ? "把两人的命理连结讲透，也把相处的节奏讲明白"
-              : "把姻缘的来龙去脉讲清，也把等待的节奏讲明白"}
-          </h3>
-          <p className="max-w-2xl text-[13px] leading-7 text-ink-light">
-            {mode === "pair"
-              ? "免费版继续保留六维度合婚分析和缘型判定。深度详批会把日柱关系、大运同步、财官互动和相处建议进一步展开，结合双方完整的四柱八字做交叉解读，适合保存后反复查看。"
-              : "免费版继续保留婚姻宫、配偶星、桃花运分析和缘型判定。深度详批会将正缘时机、配偶画像和关键大运阶段进一步展开，结合完整四柱八字做深入解读，适合保存后反复查看。"}
-          </p>
-          <div className="mt-6 border-l border-ink pl-4">
-            <div className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-ink">
-              {mode === "pair" ? "本次合婚核心" : "本次姻缘核心"}
-            </div>
-            <p className="text-[13px] leading-7 text-ink-light">
-              深度详批在免费解读的基础上，进一步结合双方十神配置、大运流年的同步度和关键时间节点，给出更具体的相处建议和阶段预判。
-            </p>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 px-4 backdrop-blur-[2px]"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm overflow-hidden rounded-2xl border border-divider bg-card shadow-[0_24px_64px_rgba(44,36,22,0.08)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {!isLoggedIn && (
+          <div className="border-b border-divider bg-divider/20 px-6 py-5 text-center dark:bg-divider/10">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">新用户注册</p>
+            <p className="mt-2 text-xl font-semibold tracking-[0.06em] text-ink dark:text-paper">当日免费体验</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-ink-light">注册即享当日不限次数解读，到期后按需选择方案</p>
           </div>
+        )}
+        {isLoggedIn && (
+          <div className="border-b border-divider px-6 py-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">开通会员</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-ink-light">选择方案即可开通</p>
+          </div>
+        )}
+
+        <div className="space-y-1.5 px-5 py-4">
+          {plans.map((plan) => {
+            const isSelected = selected === plan.label;
+            return (
+              <button
+                key={plan.label}
+                type="button"
+                onClick={() => setSelected(isSelected ? null : plan.label)}
+                className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition-all ${
+                  isSelected
+                    ? "bg-ink text-paper dark:bg-paper dark:text-ink"
+                    : "bg-divider/20 text-ink hover:bg-divider/30 dark:bg-divider/10 dark:text-paper dark:hover:bg-divider/20"
+                }`}
+              >
+                <div>
+                  <p className="text-[13px] font-medium tracking-[0.06em]">{plan.label}</p>
+                  <p className={`mt-0.5 text-[11px] ${isSelected ? "opacity-70" : "text-ink-fade"}`}>{plan.desc}</p>
+                </div>
+                <span className="shrink-0 text-[15px] font-semibold tracking-[0.04em]">{plan.price}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="border border-ink bg-paper p-5 dark:bg-card">
-          <div className="mb-4">
-            <div className="mb-1 text-[11px] tracking-[0.14em] text-ink-fade">登录后即可查看</div>
-            <div className="text-[13px] leading-6 text-ink-light">深度详批功能即将推出，敬请期待</div>
-          </div>
+        <div className="border-t border-divider px-5 py-4">
           <Link
-            href="/me"
-            className="inline-flex w-full min-h-11 items-center justify-center border border-ink px-7 py-3 text-sm font-medium tracking-[0.14em] text-ink transition-colors hover:bg-divider/40 dark:border-paper dark:text-paper dark:hover:bg-paper/10"
+            href={isLoggedIn ? "/me" : "/register"}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-ink px-7 py-3 text-sm font-medium tracking-[0.14em] text-paper transition-opacity hover:opacity-90 dark:bg-paper dark:text-ink"
           >
-            查看我的账户
+            {isLoggedIn ? "立即开通" : "注册并开通"}{selected ? ` · ${plans.find((p) => p.label === selected)?.price}` : ""}
           </Link>
+          <button
+            onClick={onClose}
+            className="mt-2.5 w-full text-center text-[11px] tracking-[0.1em] text-ink-fade transition-colors hover:text-ink dark:hover:text-paper"
+          >
+            关闭
+          </button>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-7 grid gap-3 sm:grid-cols-4">
-        {deliverables.map((item) => (
-          <div key={item.label} className="border border-divider bg-paper/50 p-4 dark:bg-card/50">
-            <div className="mb-1 text-xl font-thin text-ink dark:text-paper">{item.value}</div>
-            <div className="mb-1 text-[11px] font-semibold tracking-[0.14em] text-ink">{item.label}</div>
-            <div className="text-[11px] leading-5 text-ink-fade">{item.note}</div>
-          </div>
-        ))}
+export function MarriageDeepReportOffer({
+  mode,
+  result,
+  lastInput,
+}: {
+  mode: "pair" | "solo";
+  result?: unknown;
+  lastInput?: unknown;
+}) {
+  const isPair = mode === "pair";
+  const router = useRouter();
+  const [account, setAccount] = useState<AccountUser | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.json())
+      .then((data) => setAccount(data.user ?? null))
+      .catch(() => setAccount(null))
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const canAccess = account?.isVip ?? false;
+
+  const handleViewReport = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/reports/marriage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          result,
+          ...(mode === "solo" ? { input: lastInput } : { inputs: lastInput }),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "加载失败");
+      window.sessionStorage.setItem(`yixiang:marriage-report:${data.report.id}`, JSON.stringify(data.report));
+      setErrMsg(null);
+      router.push(`/reports/marriage/${data.report.id}`);
+    } catch (e) {
+      setLoading(false);
+      setErrMsg(e instanceof Error ? e.message : "网络异常，请稍后重试");
+    }
+  };
+
+  if (!loaded) return null;
+
+  // 已登录且有权限 → 只显示查看按钮
+  if (canAccess) {
+    return (
+      <div className="overflow-hidden rounded-2xl border border-divider bg-card px-6 py-6 text-center sm:px-8">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">
+          {isPair ? "合盘深度解读" : "感情深度解读"}
+        </p>
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-light">
+          {isPair ? "已解锁，可查看完整合盘分析。" : "已解锁，可查看完整感情分析。"}
+        </p>
+        <button
+          onClick={handleViewReport}
+          disabled={loading}
+          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-ink px-8 py-3 text-sm font-medium tracking-[0.14em] text-paper transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-paper dark:text-ink"
+        >
+          {loading ? "加载中..." : "查看深度解读"}
+        </button>
+        {errMsg && (
+          <p className="mt-3 text-[12px] text-red-600/80 dark:text-red-400/80">{errMsg}</p>
+        )}
       </div>
+    );
+  }
 
-      <div className="mt-5 border border-divider bg-paper/40 p-4 dark:bg-card/40">
-        <div className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-ink">深度详批内容</div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {modules.map((m) => (
-            <div key={m} className="border border-divider px-3 py-2 text-center text-[11px] tracking-[0.12em] text-ink-light">
-              {m}
+  // 已登录无权限或未登录
+  return (
+    <>
+      <div className="overflow-hidden rounded-2xl border border-divider bg-card">
+        <div className="px-6 py-6 sm:px-8">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">
+            {isPair ? "合盘深度解读" : "感情深度解读"}
+          </p>
+          <h2 className="mt-2 max-w-lg text-xl font-semibold leading-snug tracking-[0.08em] text-ink dark:text-paper">
+            {isPair ? "这段关系能走多远？" : "想更深入地了解自己的感情走向？"}
+          </h2>
+          <p className="mt-2 max-w-lg text-[13px] leading-[1.8] text-ink-light">
+            {isPair
+              ? "解锁后展开日柱关系、五行互补、大运同步与相处要点，从命理角度看清这段关系的底层结构。"
+              : "解锁后展开感情节奏、伴侣特质、关键时段与相处方向，适合保存后反复回看。"}
+          </p>
+
+          <div className="mt-5 flex items-center justify-between rounded-xl bg-divider/20 px-5 py-4 dark:bg-divider/10">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">深度解读</p>
+              <p className="text-2xl font-light tracking-[0.04em] text-ink dark:text-paper">
+                ¥8.8 <span className="text-[11px] font-normal tracking-normal text-ink-fade">
+                  {account ? "起 · 选择方案开通" : "起 · 注册当日免费体验"}
+                </span>
+              </p>
             </div>
-          ))}
+            <button
+              onClick={() => setPlanOpen(true)}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-ink bg-ink px-5 py-2.5 text-sm font-medium tracking-[0.14em] text-paper transition-opacity hover:opacity-90 dark:border-paper dark:bg-paper dark:text-ink"
+            >
+              解锁深度解读
+            </button>
+          </div>
         </div>
       </div>
-    </Card>
+
+      <PlanModal open={planOpen} onClose={() => setPlanOpen(false)} isLoggedIn={!!account} />
+    </>
   );
 }

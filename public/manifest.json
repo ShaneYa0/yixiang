@@ -1,0 +1,20 @@
+{
+  "name": "易象 - 现代命理解读",
+  "short_name": "易象",
+  "description": "基于传统易学智慧，用现代界面呈现每日运势、八字排盘、姻缘配对、易经占卦与黄历查询。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF6EE",
+  "theme_color": "#2C2416",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "lang": "zh-CN",
+  "categories": ["lifestyle", "utilities"]
+}

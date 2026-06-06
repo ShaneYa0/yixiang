@@ -1,0 +1,252 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #FAF6EE;
+  --color-ink: #2C2416;
+  --color-ink-light: #7A6E5E;
+  --color-ink-fade: #B8A88A;
+  --color-ink-soft: #A6947A;
+  --color-card: #FFFFFF;
+  --color-divider: #E8E0D4;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #FAF6EE;
+}
+
+.dark html,
+html.dark {
+  background: #24211D;
+}
+
+body {
+  margin: 0;
+  background-color: #FAF6EE;
+  color: #2C2416;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dark mode overrides */
+.dark body {
+  background-color: #24211D;
+  color: #F2E8D8;
+}
+
+.dark .bg-paper {
+  background-color: #24211D;
+}
+
+.dark .bg-card {
+  background-color: #302C26;
+}
+
+.dark .bg-white {
+  background-color: #302C26;
+}
+
+.dark .text-ink {
+  color: #F2E8D8;
+}
+
+.dark .text-ink-light {
+  color: #D8C9B6;
+}
+
+.dark .text-ink-fade {
+  color: #BFAA8A;
+}
+
+.dark .text-ink-soft {
+  color: #CBB89D;
+}
+
+.dark .border-ink {
+  border-color: #F2E8D8;
+}
+
+.dark .border-divider {
+  border-color: #51483B;
+}
+
+.dark .bg-divider {
+  background-color: #51483B;
+}
+
+.dark .bg-ink {
+  background-color: #F2E8D8;
+}
+
+
+.dark .text-paper {
+  color: #24211D;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #302C26;
+  color: #F2E8D8;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #BFAA8A;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: #E6D3B5;
+}
+
+.dark input,
+.dark select,
+.dark textarea,
+.dark button {
+  color-scheme: dark;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+@keyframes yx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes yx-fill {
+  from {
+    width: 0;
+  }
+}
+
+@keyframes yx-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes yx-float {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.88);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-yx-rise {
+  animation: yx-rise 520ms ease both;
+}
+
+.animate-yx-fill {
+  animation: yx-fill 700ms ease both;
+}
+
+.animate-yx-pop {
+  animation: yx-pop 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.animate-yx-float {
+  animation: yx-float 820ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* VIP golden shimmer */
+@keyframes yx-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes yx-golden-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(180, 140, 60, 0.15), 0 2px 16px rgba(180, 140, 60, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(180, 140, 60, 0.25), 0 4px 24px rgba(180, 140, 60, 0.12);
+  }
+}
+
+.animate-yx-shimmer {
+  background: linear-gradient(110deg, transparent 30%, rgba(180, 140, 60, 0.12) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: yx-shimmer 2.8s ease-in-out infinite;
+}
+
+.animate-yx-golden-glow {
+  animation: yx-golden-glow 2s ease-in-out infinite;
+}
+
+/* Dark mode VIP shimmer adjustments */
+.dark .animate-yx-shimmer {
+  background: linear-gradient(110deg, transparent 30%, rgba(220, 180, 80, 0.15) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: yx-shimmer 2.8s ease-in-out infinite;
+}
+
+/* Element card glow */
+@keyframes yx-element-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  50% {
+    box-shadow: 0 0 8px 2px currentColor;
+  }
+}
+
+.animate-yx-element-glow {
+  animation: yx-element-glow 3s ease-in-out infinite;
+}
+
+/* Fade slide up */
+@keyframes yx-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-yx-fade-up {
+  animation: yx-fade-up 0.5s ease both;
+}
+
+/* Animations for report page */
+@keyframes marriage-line-draw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}

@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+
+# build output
+out/
+dist/
+
+# environment
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+dev-*.out.log
+dev-*.err.log
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# testing
+coverage/
+
+# vercel
+.vercel/
+
+# prisma
+prisma/*.db
+prisma/*.db-journal
