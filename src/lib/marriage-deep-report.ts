@@ -1,7 +1,8 @@
 import type { MarriageResult, SingleMarriageResult } from "@/lib/marriage";
-import type { BaziResult } from "@/lib/types";
+import type { BaziResult, LuckCycle } from "@/lib/types";
 import { calculateBazi } from "@/lib/bazi";
 import { computeShenSha, shenShaSummary, getChangShengStage, type ShenShaItem } from "@/lib/shensha";
+import { computeMarriageTiming } from "@/lib/marriage";
 
 // ========== Types ==========
 
@@ -591,6 +592,527 @@ function buildAppendixBody(): string {
   ].join("\n");
 }
 
+// ========== Solo Section Builders ==========
+
+/** 生成命盘总览的白话导读 */
+function generateBaziOverviewIntro(dayStem: string, strength: string, dominantElement: string): string {
+  const strengthExplained = strength === "偏旺"
+    ? "日主偏旺，命局中自身力量较强。在感情中倾向于主导和付出，需要注意给对方表达的空间。"
+    : strength === "偏弱"
+      ? "日主偏弱，命局中需要外界支持。在感情中更倾向于被引领和滋养，适合找一个能给你安全感的伴侣。"
+      : "日主中和，命局五行较为均衡。在感情中有较好的适应性——既能给予也能接受，关系中的弹性较强。";
+
+  return [
+    `日主${dayStem}属${dominantElement}，为命局核心。${strengthExplained}`,
+    "日主（出生日的天干）代表命主自身，是八字分析的参照中心。日支（出生日的地支）为婚姻宫，代表婚姻关系的根基和底色。",
+    "后续各节将基于以上数据，从婚姻宫、配偶星、神煞、大运流年等维度逐一展开分析。",
+  ].join("\n\n");
+}
+
+/** 第1节：命盘总览 */
+function buildSoloSection1_BaziOverview(
+  bazi: BaziResult,
+  baziOverview: NonNullable<MarriageDeepReport["baziOverview"]>,
+): DeepReportSection {
+  const tableHeader = "| 柱位 | 干支 | 纳音 | 十神 | 藏干 | 五行 | 空亡 |\n|------|------|------|------|------|------|------|";
+  const tableRows = baziOverview.pillars.map(p => {
+    const hiddenDisplay = p.hiddenTenGods.length > 0 ? p.hiddenTenGods.join("、") : "—";
+    return `| ${p.label} | ${p.ganZhi} | ${p.nayin} | ${p.tenGod} | ${hiddenDisplay} | ${p.element} | ${p.xunKong} |`;
+  });
+
+  const elementsDisplay = Object.entries(bazi.elements)
+    .map(([el, count]) => `${el}${count}`)
+    .join(" · ");
+
+  const body = [
+    "以下为本命盘的四柱八字全貌，后续所有分析均基于此盘展开：",
+    "",
+    tableHeader,
+    ...tableRows,
+    "",
+    `**日主**：${bazi.dayMaster}（${bazi.dominantElement}）| **强弱**：${bazi.strength} | **用神**：${bazi.usefulElements.join("、") || "需结合大运再定"}`,
+    `**五行分布**：${elementsDisplay}`,
+    `**生肖**：${bazi.zodiac} | **命宫**：${bazi.mingGong} | **身宫**：${bazi.shenGong}`,
+    "",
+    generateBaziOverviewIntro(bazi.dayMaster, bazi.strength, bazi.dominantElement),
+  ].join("\n");
+
+  return {
+    title: "命盘总览",
+    subtitle: `${bazi.dayMaster}日主 · ${bazi.strength} · ${bazi.dominantElement}命`,
+    body,
+    highlights: [bazi.dayMaster, bazi.dominantElement, bazi.strength, bazi.zodiac],
+    data: { pillars: baziOverview.pillars, dayMaster: bazi.dayMaster, elements: bazi.elements, strength: bazi.strength, usefulElements: bazi.usefulElements },
+  };
+}
+
+/** 第2节：婚姻宫精析（合并原#2+#3） */
+function buildSoloSection2_MarriagePalace(
+  dayBranch: string,
+  dayStem: string,
+  dayPillar: { ganZhi: string; nayin: string; hiddenTenGods: string[]; element: string },
+  pillars: { label: string; ganZhi: string; element: string }[],
+  spouseStars: string[],
+): DeepReportSection {
+  const GENERATING: Record<string, string> = { "木": "火", "火": "土", "土": "金", "金": "水", "水": "木" };
+  const CONTROLLING: Record<string, string> = { "木": "土", "火": "金", "土": "水", "金": "木", "水": "火" };
+  const dayStemElement = STEM_ELEMENT[dayStem] ?? "土";
+
+  const parts: string[] = [];
+
+  // 1. 基本信息
+  const hiddenDisplay = dayPillar.hiddenTenGods.length > 0 ? dayPillar.hiddenTenGods.join("、") : "无";
+  parts.push(`婚姻宫为日支「**${dayBranch}**」，五行属**${dayPillar.element}**，纳音「${dayPillar.nayin}」，藏干：${hiddenDisplay}。`);
+
+  // 2. 日主与婚姻宫的生克关系
+  if (dayStemElement === dayPillar.element) {
+    parts.push(`日主五行与婚姻宫五行同为${dayStemElement}，**同气相求**。在专业八字中这意味着：你与伴侣在核心价值观和生活方式上天然趋同，默契度高。同气婚姻宫的优势是稳定和谐，潜在的课题是关系中可能缺少互补的张力——偶尔需要一些"不同"来保持活力。`);
+  } else if (GENERATING[dayStemElement] === dayPillar.element) {
+    parts.push(`日主${dayStemElement}生婚姻宫${dayPillar.element}，传统术语称"**日主生婚姻宫**"。取象上常用于观察命主对关系的投入倾向——你天然倾向于为婚姻付出。需结合日主强弱判断这种付出是主动滋养还是被动消耗。`);
+  } else if (GENERATING[dayPillar.element] === dayStemElement) {
+    parts.push(`婚姻宫${dayPillar.element}生日主${dayStemElement}，传统术语称"**婚姻宫生身**"。取象上可视为婚姻关系对日主有滋养作用——在健康的婚姻中，你能感受到被支持和被滋养。`);
+  } else if (CONTROLLING[dayStemElement] === dayPillar.element) {
+    parts.push(`日主${dayStemElement}克婚姻宫${dayPillar.element}，传统术语称"**日主克婚姻宫**"。取象上提示日主与婚姻宫存在制约关系——你倾向于在关系中占据主导位置。`);
+  } else if (CONTROLLING[dayPillar.element] === dayStemElement) {
+    parts.push(`婚姻宫${dayPillar.element}克日主${dayStemElement}，传统术语称"**婚姻宫克身**"。提示婚姻关系可能对你形成一定的压力和约束——很多有责任心的人恰恰在这种结构中找到成长的动力。`);
+  }
+
+  // 3. 与其他柱位的合冲刑害
+  const otherPillars = pillars.filter(p => p.label !== "日柱");
+  const interactions = analyzeDayBranchInteractions(dayBranch, otherPillars.map(p => ({ label: p.label, branch: p.ganZhi[1] })));
+  const dayStemInteractions = analyzeDayStemInteractions(dayStem, otherPillars.map(p => ({ label: p.label, stem: p.ganZhi[0] })));
+
+  if (interactions.length > 0) {
+    parts.push("");
+    parts.push("### 日支与其他柱位的互动");
+    const priorityOrder: Record<string, number> = { "冲": 1, "合": 2, "害": 3, "三合": 4, "半合": 5, "刑": 6 };
+    const sorted = [...interactions].sort((a, b) => (priorityOrder[a.type] ?? 9) - (priorityOrder[b.type] ?? 9));
+    for (const inter of sorted) {
+      const icon = inter.type === "冲" ? "⚡" : inter.type === "害" ? "⚠" : inter.type === "合" || inter.type === "三合" ? "⊕" : "○";
+      parts.push(`- ${icon} **${inter.target}${inter.type}**：${inter.description}`);
+    }
+  } else {
+    parts.push("");
+    parts.push("日支与其他柱位无明显的合冲刑害关系，婚姻宫处于相对独立的稳定状态。外部环境对婚姻的干扰较小。");
+  }
+
+  // 4. 日干合相
+  if (dayStemInteractions.length > 0) {
+    parts.push("");
+    parts.push("### 日干合相");
+    for (const inter of dayStemInteractions) {
+      parts.push(`- ${inter.description}`);
+    }
+  }
+
+  // 5. 藏干中的配偶星
+  const spouseInHidden = dayPillar.hiddenTenGods.filter(t => spouseStars.includes(t));
+  if (spouseInHidden.length > 0) {
+    parts.push("");
+    parts.push(`婚姻宫藏干中含配偶星**${spouseInHidden.join("、")}**——配偶星入婚姻宫藏干，是姻缘结构稳固的重要标志。`);
+  }
+
+  const hl: string[] = [dayBranch, dayPillar.nayin];
+  if (interactions.length > 0) hl.push(...interactions.slice(0, 2).map(i => `${i.target}${i.type}`));
+  if (spouseInHidden.length > 0) hl.push("配偶星入宫");
+
+  return {
+    title: "婚姻宫精析",
+    subtitle: `日支「${dayBranch}」· ${dayPillar.nayin}`,
+    body: parts.join("\n"),
+    highlights: hl.slice(0, 4),
+  };
+}
+
+/** 第3节：配偶星全维分析（合并原#4+#5+#7） */
+function buildSoloSection3_SpouseStar(
+  spouseStars: string[],
+  spouseAnalysis: ReturnType<typeof evaluateSpouseStarQuality>,
+  tenGodFindings: string[],
+  dayStem: string,
+  dayBranch: string,
+  dominantElement: string,
+  gender: string,
+): DeepReportSection {
+  const parts: string[] = [];
+
+  parts.push(`命主为${gender === "male" ? "男性" : "女性"}，在传统子平法中，${gender === "male" ? "男命以**财星**为配偶星（正财代表稳定伴侣，偏财代表恋爱对象或非传统关系）" : "女命以**官杀**为配偶星（正官代表稳定伴侣，七杀代表恋爱对象或非传统关系）"}。本命配偶星为「**${spouseStars.join("、")}**」。`);
+
+  parts.push("");
+  parts.push("### 配偶星配置");
+  parts.push(`配偶星在四柱中出现 **${spouseAnalysis.totalCount}** 次（天干透出 ${spouseAnalysis.surfaceCount} 次，地支藏干 ${spouseAnalysis.hiddenCount} 次），综合评级：「**${spouseAnalysis.quality}**」。`);
+  parts.push("");
+  parts.push(spouseAnalysis.analysis);
+
+  if (spouseAnalysis.positions.length > 0) {
+    parts.push(`出现位置：${spouseAnalysis.positions.join("、")}。${spouseAnalysis.positions.includes("日柱") ? "配偶星入婚姻宫（日柱），伴侣与婚姻关系存在天然契合——这是传统子平法中'正星坐正位'的上佳信号。" : ""}`);
+  }
+
+  // 得令分析
+  const spouseHitsWithElement = spouseAnalysis.spouseHits.filter(h => h.element);
+  if (spouseHitsWithElement.length > 0) {
+    parts.push("");
+    parts.push("### 配偶星得令判断");
+    const monthElement = spouseAnalysis.spouseHits.find(h => h.label === "月柱")?.element;
+    const firstSpouseElement = spouseHitsWithElement[0]?.element;
+    if (firstSpouseElement) {
+      const GENERATING: Record<string, string> = { "木": "火", "火": "土", "土": "金", "金": "水", "水": "木" };
+      const CONTROLLING: Record<string, string> = { "木": "土", "火": "金", "土": "水", "金": "木", "水": "火" };
+      if (monthElement && GENERATING[monthElement] === firstSpouseElement) {
+        parts.push(`配偶星得月令生扶（月令${monthElement}生配偶星${firstSpouseElement}），配偶星有根有气。在适婚年龄遇到的伴侣素质较高，缘分落地后对方能成为有力支持。`);
+      } else if (monthElement && CONTROLLING[monthElement] === firstSpouseElement) {
+        parts.push(`配偶星被月令克制（月令${monthElement}克配偶星${firstSpouseElement}），配偶星力量偏弱。缘分落地需要更多时间和耐心，但一旦遇到大运生扶，后期的缘分质量可能超出早期预期。`);
+      } else {
+        parts.push("配偶星与月令无直接生克关系，配偶星力量中等，缘分节奏正常。");
+      }
+    }
+  }
+
+  // 配偶画像
+  const portraitText = deriveSpousePortrait(spouseStars, spouseAnalysis.spouseHits, dayStem, dayBranch, dominantElement);
+  parts.push("");
+  parts.push("### 配偶星取象与配偶画像");
+  parts.push(portraitText);
+  parts.push("");
+  parts.push("> ⚠️ 以上仅为配偶星五行与柱位的传统取象，不等同于伴侣的实际性格、职业、外貌或相识方式。");
+
+  // 十神格局信号
+  if (tenGodFindings.length > 0) {
+    parts.push("");
+    parts.push("### 十神格局中的感情信号");
+    for (let i = 0; i < tenGodFindings.length; i++) {
+      parts.push(`${String(i + 1)}. ${tenGodFindings[i]}`);
+    }
+  }
+
+  return {
+    title: "配偶星全维分析",
+    subtitle: `配偶星：${spouseStars.join("、")} · 评级：${spouseAnalysis.quality}`,
+    body: parts.join("\n"),
+    highlights: [`${spouseAnalysis.totalCount}次出现`, spouseAnalysis.quality, ...spouseAnalysis.positions.slice(0, 2)],
+  };
+}
+
+/** 第4节：神煞关键信号（精简聚焦） */
+function buildSoloSection4_ShenSha(
+  shenShaItems: ShenShaItem[],
+  ji: ShenShaItem[],
+  xiong: ShenShaItem[],
+  neutral: ShenShaItem[],
+  dayBranch: string,
+  spouseHits: { label: string; ganZhi: string }[],
+): DeepReportSection {
+  const { primary, secondary, other } = filterPriorityShenSha(shenShaItems);
+  const parts: string[] = [];
+
+  parts.push(`命盘中共出现 ${shenShaItems.length} 颗姻缘相关神煞（吉神 ${ji.length} · 中性 ${neutral.length} · 需留意 ${xiong.length}）。以下仅展开对婚姻宫有直接影响的重点神煞。`);
+  parts.push("");
+
+  if (primary.length > 0) {
+    parts.push("### 婚姻宫神煞（权重最高）");
+    for (const s of primary) {
+      const profile = shenShaProfiles[s.name];
+      const posAnalysis = profile?.positionWeight?.[s.position] ?? s.meaning;
+      parts.push(`**${s.name}**（日柱）`);
+      parts.push(`> 取法：${profile?.basis ?? "依传统口诀推导"}`);
+      parts.push(`> ${posAnalysis}`);
+      parts.push("");
+    }
+  }
+
+  if (secondary.length > 0) {
+    parts.push("### 月柱神煞（适婚年龄阶段）");
+    for (const s of secondary) {
+      const profile = shenShaProfiles[s.name];
+      const posAnalysis = profile?.positionWeight?.[s.position] ?? s.meaning;
+      parts.push(`**${s.name}**（月柱）`);
+      parts.push(`> ${posAnalysis}`);
+      parts.push("");
+    }
+  }
+
+  if (other.length > 0 && other.length <= 3) {
+    parts.push("### 其他柱位关键神煞");
+    for (const s of other) {
+      parts.push(`- **${s.name}**（${s.position}）：${s.meaning}`);
+    }
+    parts.push("");
+  }
+
+  const synthesis = synthesizeShenSha(ji, xiong, neutral, dayBranch, spouseHits);
+  if (synthesis) {
+    parts.push("### 神煞联动研判");
+    parts.push(synthesis);
+  }
+
+  return {
+    title: "神煞关键信号",
+    subtitle: `${primary.length + secondary.length} 颗重点神煞 · ${primary.length} 颗坐婚姻宫`,
+    body: parts.join("\n"),
+    highlights: [...primary.map(s => s.name), ...secondary.map(s => s.name)].slice(0, 6),
+    data: { primary: primary.map(s => ({ name: s.name, position: s.position })), jiCount: ji.length, xiongCount: xiong.length },
+  };
+}
+
+/** 第5节：大运婚姻走势 */
+function buildSoloSection5_LuckCycles(
+  luckCycles: LuckCycle[],
+  currentCycle: LuckCycle | undefined,
+  dayStem: string,
+  dayBranch: string,
+  spouseStars: string[],
+  yearBranch: string,
+): DeepReportSection {
+  const xianChiBranch = ["申", "子", "辰"].includes(yearBranch) ? "酉"
+    : ["寅", "午", "戌"].includes(yearBranch) ? "卯"
+    : ["亥", "卯", "未"].includes(yearBranch) ? "子" : "午";
+
+  const cycleBlocks: string[] = [];
+
+  for (const cycle of luckCycles) {
+    const isCurrent = cycle === currentCycle;
+    const cStem = cycle.ganZhi[0];
+    const cBranch = cycle.ganZhi[1];
+    const lines: string[] = [];
+
+    lines.push(`### ${isCurrent ? "▶ " : ""}${cycle.ganZhi}（${cycle.startAge}-${cycle.endAge}岁）${isCurrent ? " ← 当前大运" : ""}`);
+    lines.push("");
+
+    const stemEl = STEM_ELEMENT[cStem] ?? "土";
+    const dayStemEl = STEM_ELEMENT[dayStem] ?? "土";
+    const stemRel = describeElementRelation(dayStemEl, stemEl);
+    if (stemRel === "生扶") {
+      lines.push(`- **日主**：大运天干${cStem}(${stemEl})生扶日主${dayStem}(${dayStemEl})，此运中自身能量得到加强，在感情中更主动。`);
+    } else if (stemRel === "受生") {
+      lines.push(`- **日主**：日主生大运天干，此运中自身能量有所消耗，感情中可能倾向于付出而非索取。`);
+    } else if (stemRel === "同气") {
+      lines.push(`- **日主**：大运天干与日主同为${stemEl}，此运中自我意识和行动力同步增强。`);
+    } else if (stemRel === "相克" || stemRel === "受克") {
+      lines.push(`- **日主**：大运天干${cStem}(${stemEl})与日主${dayStem}(${dayStemEl})相克，此运中可能面临外部压力，感情方面需要更多耐心。`);
+    }
+
+    if (cBranch === dayBranch) {
+      lines.push(`- **婚姻宫**：大运地支与日支同为${dayBranch}（伏吟），婚姻宫被引动，是感情走向稳定的关键十年。`);
+    } else if (LIU_HE[cBranch] === dayBranch) {
+      lines.push(`- **婚姻宫**：大运支${cBranch}与日支${dayBranch}六合，婚姻宫被合住——关系容易趋于稳定和深化，是推进婚姻承诺的有利时段。`);
+    } else if (LIU_CHONG[cBranch] === dayBranch) {
+      lines.push(`- **婚姻宫**：大运支${cBranch}与日支${dayBranch}六冲，婚姻宫被冲动——感情生活可能出现重要变动。冲不等于分离，也可能是关系的升级或重新定义。`);
+    } else if (LIU_HAI[cBranch] === dayBranch) {
+      lines.push(`- **婚姻宫**：大运支${cBranch}与日支${dayBranch}六害，关系中需注意慢性不协调因素。`);
+    } else {
+      lines.push(`- **婚姻宫**：大运地支与日支无直接合冲刑害，婚姻宫在此运中相对平稳。`);
+    }
+
+    if (spouseStars.includes(cStem)) {
+      lines.push(`- **配偶星**：大运天干${cStem}为配偶星透出，此运中缘分信号强烈，是认识正缘或关系升级的重要阶段。`);
+    }
+
+    if (cBranch === xianChiBranch) {
+      lines.push(`- **桃花**：大运支${cBranch}落桃花位，此运中社交机会增多。桃花代表机遇，筛选比数量更重要。`);
+    }
+
+    lines.push("");
+    cycleBlocks.push(lines.join("\n"));
+  }
+
+  const keyCycles = luckCycles.filter(c => {
+    const cBranch = c.ganZhi[1];
+    return cBranch === dayBranch || LIU_HE[cBranch] === dayBranch || LIU_CHONG[cBranch] === dayBranch
+      || spouseStars.includes(c.ganZhi[0]) || cBranch === xianChiBranch;
+  });
+  const keyCount = keyCycles.length;
+
+  return {
+    title: "大运婚姻走势",
+    subtitle: `${luckCycles.length}步大运 · ${keyCount}步有直接姻缘信号`,
+    body: [
+      "每一步大运约十年，以下逐运分析对婚姻宫（日支）和配偶星的影响：",
+      "",
+      ...cycleBlocks,
+      "大运分析基于八字起运推算。伏吟主变动和强化，六合主稳定和深化，六冲主变动和重新定义，桃花到位主机遇增多，配偶星透干主缘分触发。",
+    ].join("\n"),
+    highlights: keyCycles.slice(0, 4).map(c => `${c.ganZhi}（${c.startAge}-${c.endAge}岁）`),
+    data: { keyCount, totalCycles: luckCycles.length },
+  };
+}
+
+/** 第6节：流年引动节点 */
+function buildSoloSection6_YearlyActivation(
+  timing: { pastYears: number[]; currentYear: number | null; futureYears: number[]; yearReasons: Record<number, string> },
+  luckCycles: LuckCycle[],
+  dayStem: string,
+  dayBranch: string,
+  spouseStars: string[],
+  yearBranch: string,
+): DeepReportSection {
+  const now = new Date().getFullYear();
+  const parts: string[] = [];
+
+  const peachBranch = ["申", "子", "辰"].includes(yearBranch) ? "酉"
+    : ["寅", "午", "戌"].includes(yearBranch) ? "卯"
+    : ["亥", "卯", "未"].includes(yearBranch) ? "子" : "午";
+
+  const yearGanZhiMap: Record<number, string> = {};
+  for (const cycle of luckCycles) {
+    for (const y of cycle.years) {
+      if (y.year >= now - 2 && y.year <= now + 8) {
+        yearGanZhiMap[y.year] = y.ganZhi;
+      }
+    }
+  }
+
+  parts.push("基于大运流年分析，以下年份对婚姻宫或配偶星产生直接引动，是感情层面的重要时间节点：");
+  parts.push("");
+
+  if (timing.currentYear) {
+    parts.push(`### ▶ ${timing.currentYear}年（今年）`);
+    const ganZhi = yearGanZhiMap[timing.currentYear] ?? "";
+    const detail = analyzeYearlyDetail(timing.currentYear, ganZhi, dayStem, dayBranch, spouseStars, peachBranch);
+    if (detail) {
+      parts.push(`**引动**：${detail.type}`);
+      parts.push(detail.detail);
+      parts.push(`**建议**：${detail.advice}`);
+    } else if (timing.yearReasons[timing.currentYear]) {
+      parts.push(timing.yearReasons[timing.currentYear]);
+    }
+    parts.push("");
+  }
+
+  if (timing.futureYears.length > 0) {
+    parts.push("### 未来关键年份");
+    parts.push("");
+    for (const year of timing.futureYears.slice(0, 8)) {
+      const ganZhi = yearGanZhiMap[year] ?? "";
+      const detail = analyzeYearlyDetail(year, ganZhi, dayStem, dayBranch, spouseStars, peachBranch);
+      parts.push(`**${year}年**`);
+      if (detail) {
+        parts.push(`- 引动：${detail.type}`);
+        parts.push(`- ${detail.detail}`);
+        parts.push(`- 建议：${detail.advice}`);
+      } else if (timing.yearReasons[year]) {
+        parts.push(`- ${timing.yearReasons[year]}`);
+      }
+      parts.push("");
+    }
+  }
+
+  if (timing.pastYears.length > 0) {
+    parts.push(`### 过去参考年份：${timing.pastYears.join("、")}`);
+    parts.push("这些年份发生的感情事件可以作为未来判断的参照。");
+  }
+
+  return {
+    title: "流年引动节点",
+    subtitle: `未来 ${timing.futureYears.length} 个关键年份`,
+    body: parts.join("\n"),
+    highlights: timing.futureYears.slice(0, 4).map(y => String(y)),
+    data: { pastYears: timing.pastYears, currentYear: timing.currentYear, futureYears: timing.futureYears, yearReasons: timing.yearReasons },
+  };
+}
+
+/** 第7节：综合研判与建议（去伪评分，改证据链追溯式总结） */
+function buildSoloSection7_Synthesis(
+  bazi: BaziResult,
+  spouseAnalysis: ReturnType<typeof evaluateSpouseStarQuality>,
+  ji: ShenShaItem[],
+  xiong: ShenShaItem[],
+  interactions: InteractionResult[],
+  dayChangSheng: string,
+  timing: { currentYear: number | null; futureYears: number[] },
+): DeepReportSection {
+  const dayBranch = bazi.pillars[2].ganZhi[1];
+  const parts: string[] = [];
+
+  // 核心优势
+  const strengths: string[] = [];
+  if (ji.filter(s => s.position === "日柱").length >= 1) {
+    strengths.push(`婚姻宫坐吉星（${ji.filter(s => s.position === "日柱").map(s => s.name).join("、")}），先天婚姻质量有保障基础（详见「神煞关键信号」节）。`);
+  }
+  if (xiong.filter(s => s.position === "日柱").length === 0) {
+    strengths.push("婚姻宫无凶煞落位，避免了最直接的负面信号（详见「神煞关键信号」节）。");
+  }
+  if (spouseAnalysis.totalCount >= 2) {
+    strengths.push(`配偶星配置有力（出现${spouseAnalysis.totalCount}次），缘分信号清晰可辨（详见「配偶星全维分析」节）。`);
+  }
+  if (interactions.some(i => i.type === "合" || i.type === "三合")) {
+    strengths.push(`日支与它柱相合，婚姻关系有天然和谐基础（详见「婚姻宫精析」节）。`);
+  }
+  if (["长生", "冠带", "临官", "帝旺"].includes(dayChangSheng)) {
+    strengths.push(`日主在婚姻宫处于${dayChangSheng}（上升阶段），感情主动性和能量充沛（详见「婚姻宫精析」节）。`);
+  }
+  if (spouseAnalysis.positions.includes("日柱")) {
+    strengths.push("配偶星入婚姻宫（日柱），伴侣与婚姻关系存在天然契合（详见「配偶星全维分析」节）。");
+  }
+
+  // 需要经营的课题
+  const challenges: string[] = [];
+  if (interactions.some(i => i.type === "冲")) {
+    challenges.push(`日支被${interactions.filter(i => i.type === "冲").map(i => i.target).join("、")}冲——感情生活中需要应对外部变动和冲击。建议：在关系的重要决策上多给自己一些缓冲时间，不在被冲的年份做冲动决定。`);
+  }
+  if (interactions.some(i => i.type === "害")) {
+    challenges.push(`日支被${interactions.filter(i => i.type === "害").map(i => i.target).join("、")}害——关系中存在慢性不协调因素。建议：定期开诚布公地沟通感受，不让小摩擦积累。`);
+  }
+  if (xiong.filter(s => s.position === "日柱").length >= 1) {
+    const names = xiong.filter(s => s.position === "日柱").map(s => s.name).join("、");
+    challenges.push(`婚姻宫需留意${names}。建议：参考「神煞关键信号」节中对应神煞的具体应对——这不是宿命而是需要注意的领域清单。`);
+  }
+  if (spouseAnalysis.totalCount <= 1) {
+    challenges.push("配偶星信号偏弱——缘分需要更多主动经营和大运引动。建议：主动扩大社交圈，不在原地等缘分。");
+  }
+
+  parts.push("### 核心优势");
+  if (strengths.length > 0) {
+    for (const s of strengths) parts.push(`- ${s}`);
+  } else {
+    parts.push("命盘中没有特别突出的先天优势信号——这意味着你的感情走向更多取决于后天经营而非先天配置。");
+  }
+
+  parts.push("");
+  parts.push("### 需要经营的课题");
+  if (challenges.length > 0) {
+    for (const c of challenges) parts.push(`- ${c}`);
+  } else {
+    parts.push("盘面中未见需要特别留意的结构性问题。在保持良好沟通的基础上，顺其自然地推进关系即可。");
+  }
+
+  parts.push("");
+  parts.push("### 关键时间窗口");
+  if (timing.currentYear) {
+    parts.push(`**当前年（${timing.currentYear}年）**即为重要窗口——详见「流年引动节点」节。`);
+  }
+  if (timing.futureYears.length > 0) {
+    parts.push(`未来重点关注 ${timing.futureYears.slice(0, 3).join("、")} ——详见「流年引动节点」节。`);
+  }
+
+  parts.push("");
+  parts.push("### 个性化建议");
+  const mode = changShengMode[dayChangSheng] ?? "稳重型";
+  if (["长生", "沐浴", "临官"].includes(dayChangSheng)) {
+    parts.push(`你的感情模式偏${mode}——缘分主动、机遇较多。核心建议：在众多可能性中做减法，选择那个让你"安静下来"的人，而非那个让你"心跳加速"的人。`);
+  } else if (["衰", "病", "墓", "绝"].includes(dayChangSheng)) {
+    parts.push(`你的感情模式偏${mode}——节奏偏慢、缘分偏晚。核心建议：不需要因为外界压力而加速，你的节奏是合理的。重点是在等待中做好自己。`);
+  } else {
+    parts.push(`你的感情模式偏${mode}——节奏适中，有较好的适应性。核心建议：保持开放心态，在合适的流年窗口主动出击，非窗口期做好日常经营。`);
+  }
+
+  return {
+    title: "综合研判与建议",
+    subtitle: `${strengths.length}项优势 · ${challenges.length}项需要经营的课题`,
+    body: parts.join("\n"),
+    highlights: strengths.slice(0, 2).map(s => s.slice(0, 25) + "…"),
+  };
+}
+
+/** 第8节：附录 */
+function buildSoloSection8_Appendix(): DeepReportSection {
+  return {
+    title: "附录 · 命理依据",
+    subtitle: "本报告所使用的主要规则及经典出处",
+    body: buildAppendixBody(),
+    highlights: [],
+  };
+}
+
 // ========== Main Build: Solo ==========
 
 export function buildSoloDeepReport(
@@ -603,7 +1125,7 @@ export function buildSoloDeepReport(
   const spouseStars = input.gender === "male" ? ["正财", "偏财"] : ["正官", "七杀"];
 
   // ---- 八字总览 ----
-  const baziOverview = {
+  const baziOverview: NonNullable<MarriageDeepReport["baziOverview"]> = {
     pillars: pillars.map((p) => ({ label: p.label, ganZhi: p.ganZhi, nayin: p.nayin, tenGod: p.tenGod, hiddenTenGods: p.hiddenTenGods, element: p.element, xunKong: p.xunKong })),
     dayMaster: bazi.dayMaster, dominantElement: bazi.dominantElement, zodiac: bazi.zodiac,
     elements: bazi.elements, strength: bazi.strength, shenGong: bazi.shenGong, mingGong: bazi.mingGong,
@@ -612,205 +1134,42 @@ export function buildSoloDeepReport(
   const dayStem = pillars[2].ganZhi[0];
   const dayBranch = pillars[2].ganZhi[1];
   const dayChangSheng = getChangShengStage(dayStem, dayBranch);
-  const csMode = changShengMode[dayChangSheng] ?? "稳重型";
+  const yearBranch = pillars[0].ganZhi[1];
 
-  // ---- 合冲刑害 ----
+  // ---- 共享分析数据 ----
   const branchInteractions = analyzeDayBranchInteractions(dayBranch, [
     { label: "年柱", branch: pillars[0].ganZhi[1] },
     { label: "月柱", branch: pillars[1].ganZhi[1] },
     { label: "时柱", branch: pillars[3].ganZhi[1] },
   ]);
-  const stemInteractions = analyzeDayStemInteractions(dayStem, [
-    { label: "年柱", stem: pillars[0].ganZhi[0] },
-    { label: "月柱", stem: pillars[1].ganZhi[0] },
-    { label: "时柱", stem: pillars[3].ganZhi[0] },
-  ]);
 
-  // ---- 神煞 ----
-  const shenShaItems = computeShenSha(bazi.dayMaster, pillars[0].ganZhi[1], pillars);
+  const shenShaItems = computeShenSha(bazi.dayMaster, yearBranch, pillars);
   const { ji, neutral, xiong } = shenShaSummary(shenShaItems);
 
-  // ---- 配偶星 ----
   const spouseAnalysis = evaluateSpouseStarQuality(baziOverview.pillars, spouseStars);
 
-  // ---- 婚姻宫 ----
-  const marriagePalaceAnalysis = analyzeMarriagePalace(
-    dayBranch, dayStem, pillars[2].hiddenTenGods, pillars[2].nayin, pillars[2].element, branchInteractions,
-  );
-
-  // ---- 十神格局 ----
   const tenGodFindings = analyzeTenGodPattern(baziOverview.pillars, dayStem, input.gender);
 
-  // ---- 配偶画像 ----
-  const spousePortrait = deriveSpousePortrait(spouseStars, spouseAnalysis.spouseHits, dayStem, dayBranch, bazi.dominantElement);
+  const peachBranch = ["申", "子", "辰"].includes(yearBranch) ? "酉"
+    : ["寅", "午", "戌"].includes(yearBranch) ? "卯"
+    : ["亥", "卯", "未"].includes(yearBranch) ? "子" : "午";
 
-  // ---- 用神与姻缘 ----
-  const usefulGodAnalysis = analyzeUsefulGodAndMarriage(bazi.usefulElements, dayBranch, spouseStars, baziOverview.pillars);
+  const timing = computeMarriageTiming(bazi, spouseStars, peachBranch);
 
-  // ---- 神煞联动 ----
-  const shenShaSynthesis = synthesizeShenSha(ji, xiong, neutral, dayBranch, spouseAnalysis.spouseHits);
-
-  // ---- 大运 ----
-  const luckLines: { ganZhi: string; ages: string; impact: string; isCurrent: boolean; details: string }[] = [];
-  bazi.luck.cycles.forEach((cycle) => {
-    const cBranch = cycle.ganZhi[1], cStem = cycle.ganZhi[0];
-    const impacts: string[] = [], impactDetails: string[] = [];
-
-    if (cBranch === dayBranch) { impacts.push("引动婚姻宫"); impactDetails.push(`大运支${cBranch}与日支${dayBranch}相同，构成伏吟，传统上视为婚姻宫相关议题更容易被反复触发；具体表现仍需结合流年与现实关系状态。`); }
-    const xianChiBranch = ["申", "子", "辰"].includes(pillars[0].ganZhi[1]) ? "酉" : ["寅", "午", "戌"].includes(pillars[0].ganZhi[1]) ? "卯" : ["亥", "卯", "未"].includes(pillars[0].ganZhi[1]) ? "子" : "午";
-    if (cBranch === xianChiBranch) { impacts.push("桃花到位"); impactDetails.push(`大运支${cBranch}落桃花位，传统上主社交与感情机会增加；桃花只代表机会和关注度，不等同于稳定关系。`); }
-    if (spouseStars.includes(cStem)) { impacts.push("配偶星透干"); impactDetails.push(`大运干${cStem}为配偶星，传统上视为伴侣议题在此运更容易显现；能否形成稳定关系仍需结合配偶宫、流年与双方选择。`); }
-    if (LIU_HE[cBranch] === dayBranch) { impacts.push("合婚姻宫"); impactDetails.push(`大运支${cBranch}与日支${dayBranch}六合，传统上主婚姻宫关系趋向联结与稳定；是否落实为确定关系或婚姻，仍需流年配合。`); }
-    if (LIU_CHONG[cBranch] === dayBranch) { impacts.push("冲婚姻宫"); impactDetails.push(`大运支${cBranch}与日支${dayBranch}六冲，传统上主婚姻宫相关状态容易变化；冲不等同于分离，应结合流年判断变化性质。`); }
-
-    const luckStemElement = STEM_ELEMENT[cStem] ?? "土";
-    const dayMasterElement = STEM_ELEMENT[dayStem] ?? "土";
-    const luckBranchElement = BRANCH_MAIN_ELEMENT[cBranch] ?? "土";
-    const dayBranchElement = BRANCH_MAIN_ELEMENT[dayBranch] ?? "土";
-    const indirectDetail = `大运干${cStem}属${luckStemElement}，与日主${dayStem}${dayMasterElement}为${describeElementRelation(luckStemElement, dayMasterElement)}；大运支${cBranch}属${luckBranchElement}，与婚姻宫${dayBranch}${dayBranchElement}未见伏吟、六合或六冲。此运缺少可单独指向婚恋事件的直接信号，不据此单断婚期。`;
-
-    luckLines.push({
-      ganZhi: cycle.ganZhi, ages: `${cycle.startAge}-${cycle.endAge}岁`,
-      impact: impacts.length > 0 ? impacts.join(" · ") : "无直接引动",
-      isCurrent: cycle === bazi.luck.currentCycle,
-      details: impactDetails.length > 0 ? impactDetails.join("\n") : indirectDetail,
-    });
-  });
-
-  // ====== Build Sections ======
-  const sections: DeepReportSection[] = [];
-
-  // 01: 神煞全盘
-  const shenShaEntries = [...ji, ...neutral, ...xiong].map((item) => {
-    const profile = shenShaProfiles[item.name];
-    return { name: item.name, category: item.category, position: item.position, meaning: profile?.relationMeaning ?? item.meaning, basis: profile?.basis ?? "依传统神煞口诀推导。", positionAnalysis: profile?.positionWeight?.[item.position] ?? "", strengthNote: profile?.strengthNote ?? null };
-  });
-
-  sections.push({
-    title: "神煞全盘",
-    subtitle: `共${shenShaItems.length}颗 · 吉神${ji.length} · 中性神煞${neutral.length} · 凶煞${xiong.length}`,
-    body: [
-      `命盘中出现${shenShaItems.length}颗姻缘相关神煞。以下逐颗展开：取法依据、柱位权重、姻缘研判。`,
-      shenShaItems.length === 0 ? "无显著姻缘神煞。神煞为辅助参考，婚姻宫和配偶星配置更为重要。" : "",
-      "",
-      shenShaSynthesis,
-    ].filter(Boolean).join("\n"),
-    highlights: [...ji.map((s) => s.name), ...xiong.map((s) => s.name)],
-    data: { entries: shenShaEntries, jiCount: ji.length, neutralCount: neutral.length, xiongCount: xiong.length },
-  });
-
-  // 02: 日柱互动 · 合冲刑害
-  const allInteractions = [...branchInteractions, ...stemInteractions];
-  sections.push({
-    title: "日柱互动 · 合冲刑害",
-    subtitle: `日支「${dayBranch}」与各柱关系`,
-    body: [
-      "日柱（尤其是日支婚姻宫）与年、月、时三柱的地支互动，是专业八字合婚中评判婚姻稳定性的核心维度。合则和谐稳定，冲则变动挑战，害则慢性不协调。以下逐项分析：",
-      "",
-      allInteractions.length > 0 ? allInteractions.map((inter) => `${inter.type === "合" || inter.type === "三合" ? "⊕" : inter.type === "冲" ? "⚡" : inter.type === "害" ? "⚠" : "○"} ${inter.target}${inter.type}：${inter.description}`).join("\n\n") : "日柱与其他柱位无明显的合冲刑害，婚姻宫处于相对独立的状态。这在专业视角下是好事——外部环境对婚姻的干扰较小，稳定性较高。",
-      "",
-      "合冲刑害的分析需要结合大运流年——静态的合冲提供的是'基本盘'，动态的大运合冲提供的是'变化节点'。详见大运章节。",
-    ].join("\n"),
-    highlights: allInteractions.length > 0 ? allInteractions.map((i) => `${i.target}${i.type}`) : ["婚姻宫独立无冲合"],
-  });
-
-  // 03: 婚姻宫详解
-  sections.push({
-    title: "婚姻宫详解",
-    subtitle: `日支「${dayBranch}」为配偶宫`,
-    body: marriagePalaceAnalysis,
-    highlights: [dayBranch, pillars[2].nayin, ...pillars[2].hiddenTenGods.slice(0, 2)],
-  });
-
-  // 04: 十神格局 · 感情模式
-  sections.push({
-    title: "十神格局 · 感情模式",
-    subtitle: `${tenGodFindings.length}项格局特征`,
-    body: [
-      "十神是八字命理中描述人际关系和性格特质的核心语言。以下基于四柱十神配置，分析你的感情行为模式和格局特征：",
-      "",
-      ...tenGodFindings.map((f, i) => `${String(i + 1)}. ${f}`),
-    ].join("\n"),
-    highlights: tenGodFindings.slice(0, 3).map((f) => f.slice(0, 30) + "…"),
-  });
-
-  // 05: 配偶星全维分析
-  sections.push({
-    title: "配偶星全维分析",
-    subtitle: `配偶星：${spouseStars.join("、")} · 评级：${spouseAnalysis.quality}`,
-    body: [
-      `你的配偶星为「${spouseStars.join("」和「")}」。在传统子平法中，${input.gender === "male" ? "男命以财星为配偶星——正财代表稳定的伴侣/妻子，偏财代表恋爱对象或非传统关系" : "女命以官星为配偶星——正官代表稳定的伴侣/丈夫，七杀代表恋爱对象或非传统关系"}。`,
-      "",
-      `配偶星在四柱中出现${spouseAnalysis.totalCount}次（天干透出${spouseAnalysis.surfaceCount}次，地支藏干${spouseAnalysis.hiddenCount}次），综合评级：「${spouseAnalysis.quality}」。`,
-      "",
-      spouseAnalysis.analysis,
-      "",
-      "【配偶星取象】",
-      spousePortrait,
-      "",
-      "以上仅为配偶星五行与柱位的传统取象，不用于断定伴侣的具体性格、职业、外貌、相识方式或婚期。",
-    ].join("\n"),
-    highlights: [`${spouseAnalysis.totalCount}次`, spouseAnalysis.quality, ...spouseAnalysis.positions.slice(0, 2)],
-  });
-
-  // 06: 十二长生 · 感情节奏
-  const spouseChangSheng = spouseAnalysis.spouseHits.map((h) => {
-    const stage = getChangShengStage(h.ganZhi[0], h.ganZhi[1]);
-    return { pillar: h.label, star: h.tenGod, stage };
-  });
-
-  sections.push({
-    title: "十二长生 · 感情节奏",
-    subtitle: `日主「${dayStem}」在婚姻宫：${dayChangSheng}（${csMode}）`,
-    body: [
-      `日主「${dayStem}」在日支（婚姻宫）「${dayBranch}」上的十二长生状态为「${dayChangSheng}」。十二长生描述天干在地支上的能量阶段，日主在婚姻宫的长生状态直接反映——`,
-      "",
-      `【感情模式】${csMode}`,
-      "十二长生状态的具体解读基于传统命理规则推导，本部分将在完整版中展开。",
-      "",
-      `【时机判断】时机判断基于十二长生在婚姻宫的状态推导。`,
-      "",
-      `【建议】建议基于日主在婚姻宫的能量阶段制定。`,
-      "",
-      spouseChangSheng.length > 0 ? [
-        "【配偶星长生状态】",
-        ...spouseChangSheng.map((s) => `  ▸ ${s.pillar}：配偶星「${s.star}」处于「${s.stage}」`),
-        "",
-        "配偶星的长生状态反映其能量阶段。长生/冠带/临官/帝旺代表配偶星有力和活跃，衰/病/死/墓代表配偶星能量偏收敛。配偶星长生在'上升阶段'时缘分主动，在'收敛阶段'时需要大运流年来激活。",
-      ].join("\n") : "",
-    ].join("\n"),
-    highlights: [`模式：${csMode}`, `日主：${dayChangSheng}`, ...spouseChangSheng.slice(0, 2).map((s) => `${s.star}：${s.stage}`)],
-  });
-
-  // 08: 用神与姻缘
-  sections.push({
-    title: "用神与姻缘",
-    subtitle: `用神：${bazi.usefulElements.join("、") || "无显著偏颇"}`,
-    body: [
-      "用神是本报告依据日主强弱与五行分布选取的平衡参考。婚姻宫或配偶星与用神一致时，可作为一项正面条件；但用神取法因流派而异，不能据此单独判断婚姻质量。",
-      "",
-      usefulGodAnalysis,
-      "",
-      `命局用神为${bazi.usefulElements.join("、") || "无显著偏颇"}。日主强弱：${bazi.strength}。用神在命理中的作用是'雪中送炭'——当婚姻宫或配偶星为用神时，婚姻对你的帮助是实质性的；当婚姻宫或配偶星非用神时，你需要从其他方面获取平衡，婚姻更多是'锦上添花'而非'雪中送炭'。`,
-    ].join("\n"),
-    highlights: [...bazi.usefulElements.slice(0, 2)],
-  });
-
-  // 09: 大运婚姻走势
-  const keyLuckLines = luckLines.filter((l) => l.impact !== "无直接引动");
-  sections.push({
-    title: "大运婚姻走势",
-    subtitle: `${bazi.luck.cycles.length}步大运 · ${keyLuckLines.length}步有直接姻缘信号`,
-    body: [
-      "每一步大运约十年，以下逐运分析对婚姻宫（日支）和配偶星的影响。'当前'标记指引你目前所处的阶段：",
-      "",
-      ...luckLines.map((l) => `${l.isCurrent ? "▶" : " "} ${l.ganZhi}（${l.ages}）${l.impact !== "平稳期" ? "：" + l.impact : ""}\n   ${l.details}`),
-      "",
-      "大运分析基于八字起运推算（以月柱顺逆排定）。伏吟主变动，桃花主机遇，配偶星透干主缘分触发，合婚姻宫主稳定和深化，冲婚姻宫主变动和重新定义。",
-    ].join("\n"),
-    highlights: keyLuckLines.slice(0, 4).map((l) => `${l.ganZhi}：${l.impact}`),
-    data: { luckLines, keyCount: keyLuckLines.length, currentIdx: luckLines.findIndex((l) => l.isCurrent) },
-  });
+  // ---- 构建8个Section ----
+  const sections: DeepReportSection[] = [
+    buildSoloSection1_BaziOverview(bazi, baziOverview),
+    buildSoloSection2_MarriagePalace(dayBranch, dayStem, {
+      ganZhi: pillars[2].ganZhi, nayin: pillars[2].nayin,
+      hiddenTenGods: pillars[2].hiddenTenGods, element: pillars[2].element,
+    }, baziOverview.pillars, spouseStars),
+    buildSoloSection3_SpouseStar(spouseStars, spouseAnalysis, tenGodFindings, dayStem, dayBranch, bazi.dominantElement, input.gender),
+    buildSoloSection4_ShenSha(shenShaItems, ji, xiong, neutral, dayBranch, spouseAnalysis.spouseHits),
+    buildSoloSection5_LuckCycles(bazi.luck.cycles, bazi.luck.currentCycle, dayStem, dayBranch, spouseStars, yearBranch),
+    buildSoloSection6_YearlyActivation(timing, bazi.luck.cycles, dayStem, dayBranch, spouseStars, yearBranch),
+    buildSoloSection7_Synthesis(bazi, spouseAnalysis, ji, xiong, branchInteractions, dayChangSheng, timing),
+    buildSoloSection8_Appendix(),
+  ];
 
   // ---- Headline ----
   const headlineMap: Record<string, string> = {
@@ -820,29 +1179,27 @@ export function buildSoloDeepReport(
     "水到渠成": "顺其自然，缘分在日常中浮现",
   };
 
+  // ---- Summary ----
+  const summary = (() => {
+    const lines: string[] = [];
+    lines.push(`${bazi.dayMaster}日主，坐${dayBranch}，${dayChangSheng}在婚姻宫。`);
+    if (spouseAnalysis.totalCount > 0) {
+      lines.push(`配偶星${spouseAnalysis.quality}（出现${spouseAnalysis.totalCount}次），缘分信号${spouseAnalysis.totalCount >= 2 ? "清晰" : "可辨"}。`);
+    } else {
+      lines.push("配偶星不显，缘分待大运流年引动。");
+    }
+    const he = branchInteractions.filter(i => i.type === "合" || i.type === "三合" || i.type === "半合");
+    const chong = branchInteractions.filter(i => i.type === "冲");
+    if (he.length > 0) lines.push(`日支与${he.map(i => i.target).join("、")}相合，婚姻宫有和谐基础。`);
+    if (chong.length > 0) lines.push(`日支与${chong.map(i => i.target).join("、")}相冲，感情生活中需要应对外部变动。`);
+    if (timing.currentYear) lines.push(`当前${timing.currentYear}年为引动窗口。`);
+    return lines.join("");
+  })();
+
   return {
     id, mode: "solo",
     headline: headlineMap[result.yuanType] ?? "姻缘深度解读",
-    summary: (() => {
-      const lines: string[] = [];
-      lines.push(`${result.person.dayMaster}日主，坐${dayBranch}，${dayChangSheng}在婚姻宫。`);
-      if (spouseAnalysis.totalCount > 0) {
-        lines.push(`配偶星${spouseAnalysis.quality}，出现${spouseAnalysis.totalCount}次（天干${spouseAnalysis.surfaceCount}、地支${spouseAnalysis.hiddenCount}），缘分信号${spouseAnalysis.totalCount >= 2 ? "清晰" : "可辨"}。`);
-      } else {
-        lines.push("配偶星不显，缘分待大运流年引动。");
-      }
-      if (allInteractions.length > 0) {
-        const he = allInteractions.filter((i) => i.type === "合" || i.type === "三合" || i.type === "半合");
-        const chong = allInteractions.filter((i) => i.type === "冲");
-        const parts: string[] = [];
-        if (he.length > 0) parts.push(`日支与${he.map((i) => i.target).join("、")}相合`);
-        if (chong.length > 0) parts.push(`与${chong.map((i) => i.target).join("、")}相冲`);
-        lines.push(`${parts.join("，")}，${chong.length > 0 ? "感情生活中需要应对外部变动。" : "婚姻宫有和谐基础。"}`);
-      }
-      const timingSummary = "缘分节奏由日主在婚姻宫的能量阶段决定";
-      lines.push(`感情模式偏${csMode}，${timingSummary}。`);
-      return lines.join("");
-    })(),
+    summary,
     createdAt: new Date().toISOString(),
     baziOverview, sections,
   };
