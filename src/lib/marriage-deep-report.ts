@@ -1205,82 +1205,215 @@ export function buildSoloDeepReport(
   };
 }
 
-// ========== Main Build: Pair ==========
+// ========== Pair Section Builders ==========
 
-export function buildPairDeepReport(
-  result: MarriageResult,
-  inputs: { personA: { birthDate: string; birthHour: number; gender: string }; personB: { birthDate: string; birthHour: number; gender: string } },
-): MarriageDeepReport {
-  const id = nextId("mp");
-  const sections: DeepReportSection[] = [];
-  const a = calculateBazi({ ...inputs.personA, gender: inputs.personA.gender as "male" | "female" });
-  const b = calculateBazi({ ...inputs.personB, gender: inputs.personB.gender as "male" | "female" });
+/** 生成双方关键差异摘要 */
+function generatePairComparisonSummary(a: BaziResult, b: BaziResult): string {
+  const parts: string[] = [];
+  const GENERATING: Record<string, string> = { "木": "火", "火": "土", "土": "金", "金": "水", "水": "木" };
+  const CONTROLLING: Record<string, string> = { "木": "土", "火": "金", "土": "水", "金": "木", "水": "火" };
+
+  if (GENERATING[a.dominantElement] === b.dominantElement) {
+    parts.push(`- 五行：甲方${a.dominantElement}生乙方${b.dominantElement}，甲方的能量天然滋养乙方。`);
+  } else if (GENERATING[b.dominantElement] === a.dominantElement) {
+    parts.push(`- 五行：乙方${b.dominantElement}生甲方${a.dominantElement}，乙方的能量天然滋养甲方。`);
+  } else if (a.dominantElement === b.dominantElement) {
+    parts.push(`- 五行：双方主导五行同为${a.dominantElement}，价值观趋同，默契度高。`);
+  } else if (CONTROLLING[a.dominantElement] === b.dominantElement) {
+    parts.push(`- 五行：甲方${a.dominantElement}克乙方${b.dominantElement}，甲方天然倾向于主导关系节奏。`);
+  } else if (CONTROLLING[b.dominantElement] === a.dominantElement) {
+    parts.push(`- 五行：乙方${b.dominantElement}克甲方${a.dominantElement}，乙方天然倾向于主导关系节奏。`);
+  } else {
+    parts.push(`- 五行：${a.dominantElement}与${b.dominantElement}无直接生克，关系中的能量互动更依赖后天磨合。`);
+  }
+
+  const sharedUseful = a.usefulElements.filter(e => b.usefulElements.includes(e));
+  if (sharedUseful.length > 0) {
+    parts.push(`- 用神：双方共有用神${sharedUseful.join("、")}，在人生方向上存在共同的"需要"。`);
+  }
+
+  const zodiacOrder = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
+  const zodiacGap = Math.abs(zodiacOrder.indexOf(a.zodiac) - zodiacOrder.indexOf(b.zodiac));
+  if (zodiacGap === 4) {
+    parts.push(`- 生肖：${a.zodiac}与${b.zodiac}为三合配对，传统婚配中的上佳组合。`);
+  } else if (zodiacGap === 6) {
+    parts.push(`- 生肖：${a.zodiac}与${b.zodiac}为六冲，需要更多耐心和智慧来经营。`);
+  }
+
+  return parts.join("\n");
+}
+
+/** 第1节：双方命盘对照 */
+function buildPairSection1_ChartComparison(
+  a: BaziResult, b: BaziResult,
+): DeepReportSection {
   const aPillars = a.pillars, bPillars = b.pillars;
 
-  // ---- 神煞对照 ----
-  const shenA = computeShenSha(a.dayMaster, aPillars[0].ganZhi[1], aPillars);
-  const shenB = computeShenSha(b.dayMaster, bPillars[0].ganZhi[1], bPillars);
-  const { ji: jiA, xiong: xiongA } = shenShaSummary(shenA);
-  const { ji: jiB, xiong: xiongB } = shenShaSummary(shenB);
-  const mutualJi = jiA.filter((sa) => jiB.some((sb) => sb.name === sa.name));
-  const mutualXiong = xiongA.filter((sa) => xiongB.some((sb) => sb.name === sa.name));
+  const body = [
+    "### 甲方命盘",
+    "| 柱位 | 干支 | 纳音 | 十神 | 五行 | 空亡 |",
+    "|------|------|------|------|------|------|",
+    ...aPillars.map(p => `| ${p.label} | ${p.ganZhi} | ${p.nayin} | ${p.tenGod} | ${p.element} | ${p.xunKong} |`),
+    "",
+    `日主：${a.dayMaster} | 主导五行：${a.dominantElement} | 强弱：${a.strength} | 生肖：${a.zodiac} | 用神：${a.usefulElements.join("、") || "无显著偏颇"}`,
+    "",
+    "### 乙方命盘",
+    "| 柱位 | 干支 | 纳音 | 十神 | 五行 | 空亡 |",
+    "|------|------|------|------|------|------|",
+    ...bPillars.map(p => `| ${p.label} | ${p.ganZhi} | ${p.nayin} | ${p.tenGod} | ${p.element} | ${p.xunKong} |`),
+    "",
+    `日主：${b.dayMaster} | 主导五行：${b.dominantElement} | 强弱：${b.strength} | 生肖：${b.zodiac} | 用神：${b.usefulElements.join("、") || "无显著偏颇"}`,
+    "",
+    "### 关键差异",
+    generatePairComparisonSummary(a, b),
+  ].join("\n");
 
-  sections.push({
-    title: "神煞对照",
-    subtitle: `甲方${shenA.length}颗 · 乙方${shenB.length}颗`,
-    body: [
-      `甲方吉星：${jiA.length > 0 ? jiA.map((s) => `${s.name}（${s.position}）`).join("、") : "无显著吉星"}`,
-      `甲方留意：${xiongA.length > 0 ? xiongA.map((s) => `${s.name}（${s.position}）`).join("、") : "无显著凶煞"}`,
-      `乙方吉星：${jiB.length > 0 ? jiB.map((s) => `${s.name}（${s.position}）`).join("、") : "无显著吉星"}`,
-      `乙方留意：${xiongB.length > 0 ? xiongB.map((s) => `${s.name}（${s.position}）`).join("、") : "无显著凶煞"}`,
-      "",
-      mutualJi.length > 0 ? `双方共有吉星：${mutualJi.map((s) => s.name).join("、")}。双方共有同一吉星时会产生共振效应——对应领域的正面影响加倍。` : "",
-      mutualXiong.length > 0 ? `双方共有需留意标记：${mutualXiong.map((s) => s.name).join("、")}。当双方都有同一信号时需更认真对待——但共同面对也意味着可以一起解决。` : "",
-      "",
-      "神煞对照看的是双方各自盘中的信号是否同步。一方吉多一方凶多时，吉方需注意不被消耗，凶方需有意识调整。双方皆有吉星时关系更易顺畅推进。",
-    ].filter(Boolean).join("\n"),
-    highlights: [...new Set([...jiA.map((s) => s.name), ...jiB.map((s) => s.name)])].slice(0, 4),
-  });
+  return {
+    title: "双方命盘对照",
+    subtitle: `${a.dayMaster}日主（${a.zodiac}）↔ ${b.dayMaster}日主（${b.zodiac}）`,
+    body,
+    highlights: [a.dayMaster, b.dayMaster, a.dominantElement, b.dominantElement, a.zodiac, b.zodiac],
+  };
+}
 
-  // ---- 十二长生交互 ----
-  const aDayStem = aPillars[2].ganZhi[0], bDayStem = bPillars[2].ganZhi[0];
-  const aDayBranch = aPillars[2].ganZhi[1], bDayBranch = bPillars[2].ganZhi[1];
-  const aDayCs = getChangShengStage(aDayStem, aDayBranch), bDayCs = getChangShengStage(bDayStem, bDayBranch);
-  const aInB = getChangShengStage(aDayStem, bDayBranch), bInA = getChangShengStage(bDayStem, aDayBranch);
+/** 第2节：日柱关系深度分析 */
+function buildPairSection2_DayPillarDeep(
+  aDayStem: string, bDayStem: string,
+  aDayBranch: string, bDayBranch: string,
+  aInB: string, bInA: string,
+): DeepReportSection {
+  const parts: string[] = [];
   const positiveStages = ["长生", "沐浴", "冠带", "临官", "帝旺"];
+  const TIAN_GAN_HE: Record<string, string> = {
+    "甲": "己", "己": "甲", "乙": "庚", "庚": "乙", "丙": "辛", "辛": "丙",
+    "丁": "壬", "壬": "丁", "戊": "癸", "癸": "戊",
+  };
+  const HE_RESULT: Record<string, string> = {
+    "甲己": "土", "己甲": "土", "乙庚": "金", "庚乙": "金",
+    "丙辛": "水", "辛丙": "水", "丁壬": "木", "壬丁": "木", "戊癸": "火", "癸戊": "火",
+  };
 
-  sections.push({
-    title: "十二长生交互",
-    subtitle: "双方能量在对方婚姻宫的状态",
-    body: [
-      `甲方日主${aDayStem}在自身婚姻宫：${aDayCs}　|　在乙方日支：${aInB}${positiveStages.includes(aInB) ? "（正向）" : "（收敛）"}`,
-      `乙方日主${bDayStem}在自身婚姻宫：${bDayCs}　|　在甲方日支：${bInA}${positiveStages.includes(bInA) ? "（正向）" : "（收敛）"}`,
-      "",
-      positiveStages.includes(aInB) && positiveStages.includes(bInA) ? "双方在对方婚姻宫都处于上升阶段——相处时能量互相支持、彼此滋养，是较为理想的互动模式。" : `双方在对方婚姻宫的状态不完全同步（甲方→${aInB}，乙方→${bInA}），关系中存在能量感受的差异。${positiveStages.includes(aInB) ? "甲方在关系中感受更舒适" : "甲方在关系中需要更多调适"}；${positiveStages.includes(bInA) ? "乙方在关系中感受更舒适" : "乙方在关系中需要更多调适"}。` + " 这不代表关系不好，而是需要双方认识到彼此的感受可能不同，并有意识地照顾对方的感受。",
-    ].join("\n"),
-    highlights: [`甲方→乙方：${aInB}`, `乙方→甲方：${bInA}`],
-  });
+  parts.push("### 天干五合");
+  if (TIAN_GAN_HE[aDayStem] === bDayStem) {
+    const result = HE_RESULT[aDayStem + bDayStem] ?? "";
+    parts.push(`双方日干**${aDayStem}${bDayStem}为天干五合**，合化${result}。`);
+    parts.push("天干五合是合盘中最重要的吉象——代表两人在核心价值观、人生方向和日常沟通中存在天然的吸引与默契。在传统子平法中，日干五合被视为'有情之合'，是长期关系最稳固的基石之一。");
+  } else {
+    parts.push(`双方日干${aDayStem}与${bDayStem}无合。天干无合不代表无缘——许多长久关系恰恰建立在彼此察觉差异、主动理解的基础上。天干无合时，关注地支关系更能看出日常相处的底色。`);
+  }
 
-  // ---- 纳音配对 ----
-  const nayinA = aPillars[2].nayin, nayinB = bPillars[2].nayin;
+  parts.push("");
+  parts.push("### 地支关系");
+
+  if (LIU_HE[aDayBranch] === bDayBranch) {
+    parts.push(`日支${aDayBranch}${bDayBranch}为**地支六合**——双方在日常习惯、家庭节奏和生活方式上自然协调。六合是合婚中最受重视的地支关系，代表两个人在同一屋檐下不容易产生根本性摩擦，适合长期共同生活。`);
+  } else if (LIU_CHONG[aDayBranch] === bDayBranch) {
+    parts.push(`日支${aDayBranch}${bDayBranch}为**地支六冲**——两人在日常节奏和行事风格上有显著差异。冲不一定是坏事——它也能带来活力和新鲜感，但需要双方在沟通中保持耐心，避免将小摩擦升级为原则冲突。`);
+  } else if (LIU_HAI[aDayBranch] === bDayBranch) {
+    parts.push(`日支${aDayBranch}${bDayBranch}为**地支六害**——传统上认为这是一种暗中损耗的关系。表面平静，实际在细节上容易互相触痛。需要双方在边界感和情绪表达上多下功夫。`);
+  } else {
+    parts.push(`日支${aDayBranch}与${bDayBranch}无明显的合冲害关系，日常相处较为平和。两人可以保持各自的节奏和空间，适合在共同目标中逐步建立默契。`);
+  }
+
+  parts.push("");
+  parts.push("### 十二长生交互");
+  parts.push(`甲方日主${aDayStem}在乙方日支${bDayBranch}：**${aInB}**${positiveStages.includes(aInB) ? "（正向——甲方在关系中感受舒适、能量充沛）" : "（收敛——甲方在关系中需要更多调适）"}`);
+  parts.push(`乙方日主${bDayStem}在甲方日支${aDayBranch}：**${bInA}**${positiveStages.includes(bInA) ? "（正向——乙方在关系中感受舒适、能量充沛）" : "（收敛——乙方在关系中需要更多调适）"}`);
+
+  if (positiveStages.includes(aInB) && positiveStages.includes(bInA)) {
+    parts.push("双方在对方婚姻宫都处于上升阶段——相处时能量互相支持、彼此滋养，是较为理想的互动模式。");
+  } else if (!positiveStages.includes(aInB) && !positiveStages.includes(bInA)) {
+    parts.push("双方在对方婚姻宫都处于收敛阶段——关系中需要更多的理解和耐心。收敛不代表不好，而是意味着彼此需要时间来适应对方的节奏。");
+  } else {
+    parts.push("双方在对方婚姻宫的状态不完全同步。这不代表关系不好，而是需要认识到彼此的感受可能不同，并有意识地照顾对方的感受。");
+  }
+
+  return {
+    title: "日柱关系深度分析",
+    subtitle: `${aDayStem}${aDayBranch} ↔ ${bDayStem}${bDayBranch}`,
+    body: parts.join("\n"),
+    highlights: [
+      TIAN_GAN_HE[aDayStem] === bDayStem ? "天干五合" : "天干无合",
+      LIU_HE[aDayBranch] === bDayBranch ? "地支六合" : LIU_CHONG[aDayBranch] === bDayBranch ? "地支六冲" : "地支平和",
+      `甲方→乙方：${aInB}`, `乙方→甲方：${bInA}`,
+    ],
+  };
+}
+
+/** 第3节：五行交互与互补 */
+function buildPairSection3_ElementInteraction(
+  a: BaziResult, b: BaziResult,
+  nayinA: string, nayinB: string,
+): DeepReportSection {
+  const GENERATING: Record<string, string> = { "木": "火", "火": "土", "土": "金", "金": "水", "水": "木" };
+  const CONTROLLING: Record<string, string> = { "木": "土", "火": "金", "土": "水", "金": "木", "水": "火" };
+  const parts: string[] = [];
+
+  // 五行生克
+  parts.push("### 五行生克链条");
+  if (GENERATING[a.dominantElement] === b.dominantElement) {
+    parts.push(`甲方${a.dominantElement}生乙方${b.dominantElement}——甲方在关系中天然倾向于给予支持与情绪价值，乙方则在被滋养中获得成长。需注意避免单方面付出过多导致不平衡。`);
+  } else if (GENERATING[b.dominantElement] === a.dominantElement) {
+    parts.push(`乙方${b.dominantElement}生甲方${a.dominantElement}——乙方在关系中扮演支持者的角色，甲方在关系中感受到滋养和安全感。`);
+  } else if (a.dominantElement === b.dominantElement) {
+    parts.push(`双方主导五行同为${a.dominantElement}，性格底色相近，价值观容易一致，相处舒服自然。但同类五行也意味着在冲突时可能缺少互补的缓冲。`);
+  } else if (CONTROLLING[a.dominantElement] === b.dominantElement) {
+    parts.push(`甲方${a.dominantElement}克乙方${b.dominantElement}——甲方可能天然处于主导位置。相克不代表不好——很多互补关系正是建立在合理的制衡之上。`);
+  } else if (CONTROLLING[b.dominantElement] === a.dominantElement) {
+    parts.push(`乙方${b.dominantElement}克甲方${a.dominantElement}——乙方可能更具主动性。重点在于相互尊重边界，而非一方压制另一方。`);
+  } else {
+    parts.push(`双方五行关系平和，不形成明显的生克链条。适合在共同经历中培养默契。`);
+  }
+
+  // 五行分布对比
+  parts.push("");
+  parts.push("### 五行分布对比");
+  const elements = ["木", "火", "土", "金", "水"] as const;
+  for (const el of elements) {
+    const aCount = a.elements[el] ?? 0;
+    const bCount = b.elements[el] ?? 0;
+    parts.push(`- ${el}：甲方${aCount} · 乙方${bCount}${aCount > bCount + 2 ? "（甲方明显偏多）" : bCount > aCount + 2 ? "（乙方明显偏多）" : ""}`);
+  }
+
+  // 纳音配对
   const nLastA = nayinA[nayinA.length - 1], nLastB = nayinB[nayinB.length - 1];
   const nayinMatch = nLastA === nLastB ? "同气共振" : ["金水", "水金", "木火", "火木", "火土", "土火", "土金", "金土"].includes(nLastA + nLastB) ? "相生滋养" : "各具其韵";
   const nayinExp: Record<string, string> = {
-    "同气共振": "双方纳音同气，在精神层面有天然的默契和共鸣。你们的生活节奏、审美趣味趋同——很多事情不需要解释就互相理解。潜在的课题是同质化过高时可能缺少互补的张力。",
-    "相生滋养": `甲方日柱纳音${nLastA}气与乙方${nLastB}气形成了生序关系，一方天然倾向于滋养另一方。这种模式在长期关系中非常舒适——被滋养的一方感到安全，滋养的一方感到有意义。需要注意保持滋养与被滋养的动态平衡。`,
-    "各具其韵": "双方纳音五行各异，各有各的节奏和韵味。需要更多时间磨合和互相理解，但磨合之后的关系往往比天然契合的关系更加稳固——因为你们是在一起成长而非依赖天然的默契。",
+    "同气共振": "双方纳音同气，在精神层面有天然的默契和共鸣。",
+    "相生滋养": "一方天然倾向于滋养另一方，长期关系中非常舒适。需保持滋养与被滋养的动态平衡。",
+    "各具其韵": "双方纳音五行各异，各有各的节奏和韵味。需要更多时间磨合和互相理解。",
   };
 
-  sections.push({
-    title: "纳音深度配对",
-    subtitle: `${nayinA} · ${nayinB}`,
-    body: [`甲方日柱纳音：${nayinA}（${nLastA}气）`, `乙方日柱纳音：${nayinB}（${nLastB}气）`, "", `配对结果：${nayinMatch}`, "", nayinExp[nayinMatch] ?? "", "", "纳音是八字中更底层的'气场'维度——不直接看吉凶，而看两人在精神气质层面的向性。纳音同气意味着不必言说的默契，纳音相生意味着自然的舒适感，纳音各异意味着需要更多理解对方节奏的时间和耐心。"].join("\n"),
-    highlights: [`${nayinA} · ${nayinB}`, nayinMatch],
-  });
+  parts.push("");
+  parts.push("### 纳音配对");
+  parts.push(`甲方日柱纳音：${nayinA}（${nLastA}气）| 乙方：${nayinB}（${nLastB}气）→ ${nayinMatch}`);
+  parts.push(nayinExp[nayinMatch] ?? "");
 
-  // ---- 十神交叉 ----
-  const aSS = inputs.personA.gender === "male" ? ["正财", "偏财"] : ["正官", "七杀"];
-  const bSS = inputs.personB.gender === "male" ? ["正财", "偏财"] : ["正官", "七杀"];
+  // 用神互补
+  const aNeedsB = a.usefulElements.filter(e => b.dominantElement === e || Object.values(b.elements).some(() => false));
+  const sharedUseful = a.usefulElements.filter(e => b.usefulElements.includes(e));
+  parts.push("");
+  parts.push("### 用神互补");
+  if (sharedUseful.length > 0) {
+    parts.push(`双方共有用神${sharedUseful.join("、")}——在人生方向上存在共同的"需要"，这是长期关系中重要的调和因素。`);
+  } else {
+    parts.push("双方用神不同，意味着各自需要从不同方面获取平衡。这不影响关系质量，但提示双方在支持对方时可能需要用不同的方式。");
+  }
+
+  return {
+    title: "五行交互与互补",
+    subtitle: `${a.dominantElement} ↔ ${b.dominantElement} · ${nayinA} ↔ ${nayinB}`,
+    body: parts.join("\n"),
+    highlights: [a.dominantElement, b.dominantElement, nayinMatch],
+  };
+}
+
+/** 第4节：十神交叉配对 */
+function buildPairSection4_TenGodCross(
+  aPillars: { ganZhi: string; tenGod: string; hiddenTenGods: string[]; label: string }[],
+  bPillars: { ganZhi: string; tenGod: string; hiddenTenGods: string[]; label: string }[],
+  aSS: string[], bSS: string[],
+): DeepReportSection {
   const tenLabels = ["年柱", "月柱", "日柱", "时柱"];
   const aInBStars: string[] = [], bInAStars: string[] = [];
 
@@ -1295,42 +1428,244 @@ export function buildPairDeepReport(
 
   const crossTotal = aInBStars.length + bInAStars.length;
 
-  sections.push({
+  const body = [
+    crossTotal >= 4
+      ? `配偶星在对方盘中出现${crossTotal}次——信号非常强。传统合婚中彼此的异性吸引力强烈。但强烈的吸引力不等于自动的好相处——日支互动和五行匹配同样重要。`
+      : crossTotal >= 2
+        ? `配偶星在对方盘中有${crossTotal}次呼应——缘分牵引力明显，彼此之间存在真实的吸引力。`
+        : crossTotal >= 1
+          ? `配偶星在对方盘中有${crossTotal}次呼应——有一定缘分牵引但强度偏弱。吸引力存在但不够直接，可能需要更多相处时间才能确认感觉。`
+          : "配偶星未在对方盘中明显显现——吸引更多依赖五行和日柱关系而非十神层面。日久生情型的关系往往比一见钟情型更经得起时间考验。",
+    "",
+    ...aInBStars, ...bInAStars,
+    "",
+    "十神交叉配对是传统合婚中最重要的指标之一。强烈的吸引力是关系的起点——日支互动和五行匹配决定了这段关系能否从'吸引'走到'长久'。",
+  ].join("\n");
+
+  return {
     title: "十神交叉配对",
-    subtitle: "配偶星在对方盘中的呼应程度",
-    body: [
-      crossTotal >= 4 ? `配偶星在对方盘中出现${crossTotal}次——信号非常强。传统合婚中这是'天造地设'级别的高分指标：彼此的异性吸引力强烈，第一眼往往就有'对了'的感觉。但强烈的吸引力不等于自动的好相处——后续的日支互动和五行匹配同样重要。` :
-        crossTotal >= 2 ? `配偶星在对方盘中有${crossTotal}次呼应——缘分牵引力明显，彼此之间存在真实的吸引力。` :
-          crossTotal >= 1 ? `配偶星在对方盘中有${crossTotal}次呼应——有一定缘分牵引但强度偏弱。吸引力存在但不够直接，可能需要更多相处时间才能确认感觉。` :
-            "配偶星未在对方盘中明显显现——吸引更多依赖五行和日柱关系而非十神层面。这种关系往往不是'一见钟情'型，而是在相处中逐渐发现对方的可贵。日久生情型的关系往往比一见钟情型更经得起时间考验。",
-      "", ...aInBStars, ...bInAStars, "",
-      "十神交叉配对是传统合婚中最重要的指标之一。但强烈的吸引力只是关系的起点——后续的日支互动（合冲刑害）和五行匹配决定了这段关系能否从'吸引'走到'长久'。",
-    ].join("\n"),
+    subtitle: `配偶星在对方盘中的呼应程度`,
+    body,
     highlights: crossTotal >= 3 ? [`${crossTotal}次呼应`, "信号强"] : crossTotal >= 1 ? [`${crossTotal}次`, "有呼应"] : ["未见明显互动"],
-  });
+  };
+}
 
-  // ---- 综合建议 ----
-  const allFindings = (result.dimensions ?? []).flatMap((d) => d.findings);
-  const jiCount = allFindings.filter((f) => f.level === "合" || f.level === "吉").length;
-  const cautionCount = allFindings.filter((f) => f.level === "慎" || f.level === "冲").length;
+/** 第5节：神煞与特殊配置共振 */
+function buildPairSection5_ShenShaResonance(
+  shenA: ShenShaItem[], shenB: ShenShaItem[],
+  jiA: ShenShaItem[], jiB: ShenShaItem[],
+  xiongA: ShenShaItem[], xiongB: ShenShaItem[],
+  aDayPillar: string, bDayPillar: string,
+): DeepReportSection {
+  const mutualJi = jiA.filter(sa => jiB.some(sb => sb.name === sa.name));
+  const mutualXiong = xiongA.filter(sa => xiongB.some(sb => sb.name === sa.name));
 
-  sections.push({
-    title: "综合建议",
+  // 特殊日柱
+  const guLuanDayPillars = new Set(["甲寅", "乙卯", "丙午", "丁巳", "戊午", "己巳", "庚申", "辛亥", "壬子", "癸亥"]);
+  const yinChaYangCuo = new Set(["丙子", "丙午", "丁丑", "丁未", "戊寅", "戊申", "辛卯", "辛酉", "壬辰", "壬戌", "癸巳", "癸亥"]);
+
+  const body = [
+    `甲方吉星：${jiA.length > 0 ? jiA.map(s => `${s.name}（${s.position}）`).join("、") : "无显著吉星"}`,
+    `甲方留意：${xiongA.length > 0 ? xiongA.map(s => `${s.name}（${s.position}）`).join("、") : "无显著凶煞"}`,
+    `乙方吉星：${jiB.length > 0 ? jiB.map(s => `${s.name}（${s.position}）`).join("、") : "无显著吉星"}`,
+    `乙方留意：${xiongB.length > 0 ? xiongB.map(s => `${s.name}（${s.position}）`).join("、") : "无显著凶煞"}`,
+    "",
+    mutualJi.length > 0 ? `双方共有吉星：${mutualJi.map(s => s.name).join("、")}。双方共有同一吉星时会产生共振效应——对应领域的正面影响加倍。` : "",
+    mutualXiong.length > 0 ? `双方共有需留意标记：${mutualXiong.map(s => s.name).join("、")}。当双方都有同一信号时需更认真对待——但共同面对也意味着可以一起解决。` : "",
+    "",
+    "### 特殊日柱配对",
+    guLuanDayPillars.has(aDayPillar) || guLuanDayPillars.has(bDayPillar)
+      ? `注意：${guLuanDayPillars.has(aDayPillar) ? "甲方" : ""}${guLuanDayPillars.has(aDayPillar) && guLuanDayPillars.has(bDayPillar) ? "和" : ""}${guLuanDayPillars.has(bDayPillar) ? "乙方" : ""}日柱为孤鸾日。传统合婚中孤鸾日主婚姻中需要更多沟通和包容。` : "",
+    yinChaYangCuo.has(aDayPillar) || yinChaYangCuo.has(bDayPillar)
+      ? `注意：${yinChaYangCuo.has(aDayPillar) ? "甲方" : ""}${yinChaYangCuo.has(aDayPillar) && yinChaYangCuo.has(bDayPillar) ? "和" : ""}${yinChaYangCuo.has(bDayPillar) ? "乙方" : ""}日柱为阴差阳错日。夫妻关系容易出现摩擦和误会，需要更多有意识的沟通。` : "",
+    !guLuanDayPillars.has(aDayPillar) && !guLuanDayPillars.has(bDayPillar) && !yinChaYangCuo.has(aDayPillar) && !yinChaYangCuo.has(bDayPillar)
+      ? "双方日柱均为正常配置，无孤鸾或阴差阳错等特殊标记。" : "",
+    "",
+    "神煞对照看的是双方各自盘中的信号是否同步。一方吉多一方凶多时，吉方需注意不被消耗，凶方需有意识调整。",
+  ].filter(s => s !== "").join("\n");
+
+  return {
+    title: "神煞与特殊配置共振",
+    subtitle: `甲方${shenA.length}颗 · 乙方${shenB.length}颗`,
+    body,
+    highlights: [...new Set([...jiA.map(s => s.name), ...jiB.map(s => s.name)])].slice(0, 4),
+  };
+}
+
+/** 第6节：大运同步分析 */
+function buildPairSection6_LuckSync(
+  aLuck: BaziResult["luck"], bLuck: BaziResult["luck"],
+  aDayBranch: string, bDayBranch: string,
+  aSS: string[], bSS: string[],
+): DeepReportSection {
+  const parts: string[] = [];
+  parts.push("大运同步看的是双方人生阶段的节奏是否合拍——关键不在于每一步都同步，而在于重要节点上是否有重合。");
+  parts.push("");
+
+  if (aLuck.currentCycle && bLuck.currentCycle) {
+    const aCycle = aLuck.currentCycle, bCycle = bLuck.currentCycle;
+    parts.push(`### 当前大运`);
+    parts.push(`- 甲方：${aCycle.ganZhi}（${aCycle.startAge}-${aCycle.endAge}岁）`);
+    parts.push(`- 乙方：${bCycle.ganZhi}（${bCycle.startAge}-${bCycle.endAge}岁）`);
+
+    const STEM_ELEMENT: Record<string, string> = { "甲": "木", "乙": "木", "丙": "火", "丁": "火", "戊": "土", "己": "土", "庚": "金", "辛": "金", "壬": "水", "癸": "水" };
+    const aEl = STEM_ELEMENT[aCycle.ganZhi[0]] ?? "土";
+    const bEl = STEM_ELEMENT[bCycle.ganZhi[0]] ?? "土";
+    const GENERATING: Record<string, string> = { "木": "火", "火": "土", "土": "金", "金": "水", "水": "木" };
+
+    if (aEl === bEl) parts.push("双方大运同气，步调相近，默契不错。");
+    else if (GENERATING[aEl] === bEl) parts.push("甲方大运生扶乙方大运，甲方的运势走向自然支持乙方的发展。");
+    else if (GENERATING[bEl] === aEl) parts.push("乙方大运生扶甲方大运，乙方的运势走向自然支持甲方的发展。");
+    else parts.push("双方大运异气，各自人生节奏不同，需要更多理解和空间。");
+  }
+
+  // 重合时段
+  parts.push("");
+  parts.push("### 大运重合分析");
+  let overlapCount = 0;
+  for (const aCycle of aLuck.cycles) {
+    for (const bCycle of bLuck.cycles) {
+      const overlapStart = Math.max(aCycle.startYear, bCycle.startYear);
+      const overlapEnd = Math.min(aCycle.endYear, bCycle.endYear);
+      if (overlapStart <= overlapEnd && overlapCount < 3) {
+        const aPillar = aCycle.ganZhi[1], bPillar = bCycle.ganZhi[1];
+        const signals: string[] = [];
+        if (aPillar === aDayBranch) signals.push("甲方婚姻宫伏吟");
+        if (bPillar === bDayBranch) signals.push("乙方婚姻宫伏吟");
+        if (LIU_HE[aPillar] === aDayBranch) signals.push("甲方婚姻宫被合");
+        if (LIU_HE[bPillar] === bDayBranch) signals.push("乙方婚姻宫被合");
+        if (aSS.includes(aCycle.ganZhi[0])) signals.push("甲方配偶星透出");
+        if (bSS.includes(bCycle.ganZhi[0])) signals.push("乙方配偶星透出");
+        parts.push(`- ${overlapStart}-${overlapEnd}年${signals.length > 0 ? "：" + signals.join("、") : ""}`);
+        overlapCount++;
+      }
+    }
+  }
+
+  return {
+    title: "大运同步分析",
+    subtitle: `${aLuck.cycles.length}步 vs ${bLuck.cycles.length}步`,
+    body: parts.join("\n"),
+    highlights: aLuck.currentCycle && bLuck.currentCycle
+      ? [`甲方：${aLuck.currentCycle.ganZhi}`, `乙方：${bLuck.currentCycle.ganZhi}`]
+      : ["大运同步"],
+  };
+}
+
+/** 第7节：综合研判与相处建议 */
+function buildPairSection7_PairSynthesis(
+  result: MarriageResult,
+  crossTotal: number,
+  mutualJi: ShenShaItem[],
+  mutualXiong: ShenShaItem[],
+  jiCount: number,
+  cautionCount: number,
+): DeepReportSection {
+  const parts: string[] = [];
+
+  parts.push("### 核心匹配优势");
+  const strengths: string[] = [];
+  if (jiCount >= 3) strengths.push("多个维度匹配度较高，先天结构适合长期发展。");
+  if (crossTotal >= 3) strengths.push("十神交叉互动强，彼此的吸引力真实且强烈。");
+  if (mutualJi.length > 0) strengths.push(`双方共有吉星${mutualJi.map(s => s.name).join("、")}，在对应领域的运势共振会加强关系的正面体验。`);
+  if (strengths.length === 0) strengths.push("匹配度中等偏上。关系的走向更多取决于双方的经营而非命理结构。");
+  for (const s of strengths) parts.push(`- ${s}`);
+
+  parts.push("");
+  parts.push("### 需要磨合的领域");
+  const challenges: string[] = [];
+  if (cautionCount >= 2) challenges.push("部分维度存在需要留意的信号。很多长期稳定的关系正是在磨合中建立的——提前知道哪里有张力，才能有针对性地经营。");
+  if (mutualXiong.length > 0) challenges.push(`双方共有需注意标记${mutualXiong.map(s => s.name).join("、")}，共同面对也意味着可以一起解决。`);
+  if (challenges.length === 0) challenges.push("未见需要特别留意的结构性问题。专业合婚的目的不是'打分'而是'提供经营地图'。");
+  for (const c of challenges) parts.push(`- ${c}`);
+
+  parts.push("");
+  parts.push("### 相处建议");
+  const dims = result.dimensions ?? [];
+  const hasClash = dims.some(d => d.findings.some(f => f.level === "冲"));
+  const hasHarmony = dims.some(d => d.findings.some(f => f.level === "合" || f.level === "吉"));
+
+  if (hasHarmony && !hasClash) {
+    parts.push("你们的匹配基础不错，建议在享受默契的同时，不要因为'太合'而忽略了关系需要主动经营。共同目标和新鲜感的维护是长期关系的关键。");
+  } else if (hasClash) {
+    parts.push("张力的存在不是坏事——它提供的是成长的机会。关键是在冲突时回到'我们是一队的'这个基本认知。避免在小摩擦中积累怨恨，定期开诚布公地沟通是关键。");
+  } else {
+    parts.push("关系中的弹性最重要——既能共享高光时刻，也能在低谷时彼此兜底。命理分析提供的是底层模式，你们的实际经历和选择才是最终的决定性变量。");
+  }
+
+  parts.push("");
+  parts.push("> 以上合盘分析基于八字命理传统算法推导，提供的是双方能量互动的底层模式。每段关系都是独一无二的——你们的经历、选择和努力比任何命理维度都重要。");
+
+  return {
+    title: "综合研判与相处建议",
     subtitle: `${jiCount}项匹配 · ${cautionCount}项需留意`,
-    body: [
-      jiCount >= 3 ? "双方在多个维度上匹配度较高，先天结构适合长期发展。但高匹配度提供的是好的起点——关系的长期质量取决于双方的投入和共同成长。关键是要在'命中注定'的舒适感之外，仍然保持主动经营关系的意识。" :
-        cautionCount >= 2 ? "部分维度存在需要留意的信号。很多长期稳定的关系正是在磨合中建立的——提前知道哪里有张力，才能有针对性地经营。专业合婚的目的不是'打分'而是'提供经营地图'。" :
-          "整体匹配度中等偏上。关系的走向更多取决于双方的经营而非命理结构。命理分析提供的是底层模式和潜在课题——你们的实际经历和选择才是最终的决定性变量。",
-      crossTotal >= 3 ? " 十神交叉互动强，彼此的吸引力是真实且强烈的。建议在享受这种吸引力的同时，也关注日常相处中的磨合和共同目标的建立——吸引力是关系的'发动机'，但相处是关系的'底盘'。" : "",
-      mutualJi.length > 0 ? ` 双方共有吉星${mutualJi.map((s) => s.name).join("、")}，在对应领域的运势共振会加强关系的正面体验。` : "",
-      "",
-      "以上合盘分析基于八字命理传统算法推导，提供的是双方能量互动的底层模式。每段关系都是独一无二的——你们的经历、选择和努力比任何命理维度都重要。",
-    ].filter(Boolean).join("\n"),
+    body: parts.join("\n"),
     highlights: jiCount >= 3 ? ["多维匹配", "适合长期发展"] : ["需要经营", "关注沟通"],
+  };
+}
+
+// ========== Main Build: Pair ==========
+
+export function buildPairDeepReport(
+  result: MarriageResult,
+  inputs: { personA: { birthDate: string; birthHour: number; gender: string }; personB: { birthDate: string; birthHour: number; gender: string } },
+): MarriageDeepReport {
+  const id = nextId("mp");
+  const a = calculateBazi({ ...inputs.personA, gender: inputs.personA.gender as "male" | "female" });
+  const b = calculateBazi({ ...inputs.personB, gender: inputs.personB.gender as "male" | "female" });
+  const aPillars = a.pillars, bPillars = b.pillars;
+
+  const aDayStem = aPillars[2].ganZhi[0], bDayStem = bPillars[2].ganZhi[0];
+  const aDayBranch = aPillars[2].ganZhi[1], bDayBranch = bPillars[2].ganZhi[1];
+  const aInB = getChangShengStage(aDayStem, bDayBranch);
+  const bInA = getChangShengStage(bDayStem, aDayBranch);
+
+  // 神煞
+  const shenA = computeShenSha(a.dayMaster, aPillars[0].ganZhi[1], aPillars);
+  const shenB = computeShenSha(b.dayMaster, bPillars[0].ganZhi[1], bPillars);
+  const { ji: jiA, xiong: xiongA } = shenShaSummary(shenA);
+  const { ji: jiB, xiong: xiongB } = shenShaSummary(shenB);
+  const mutualJi = jiA.filter(sa => jiB.some(sb => sb.name === sa.name));
+  const mutualXiong = xiongA.filter(sa => xiongB.some(sb => sb.name === sa.name));
+
+  // 配偶星
+  const aSS = inputs.personA.gender === "male" ? ["正财", "偏财"] : ["正官", "七杀"];
+  const bSS = inputs.personB.gender === "male" ? ["正财", "偏财"] : ["正官", "七杀"];
+
+  // 十神交叉计数
+  let crossTotal = 0;
+  bPillars.forEach(p => {
+    if (aSS.includes(p.tenGod)) crossTotal++;
+    crossTotal += p.hiddenTenGods.filter(t => aSS.includes(t)).length;
   });
+  aPillars.forEach(p => {
+    if (bSS.includes(p.tenGod)) crossTotal++;
+    crossTotal += p.hiddenTenGods.filter(t => bSS.includes(t)).length;
+  });
+
+  // 纳音
+  const nayinA = aPillars[2].nayin, nayinB = bPillars[2].nayin;
+
+  // Findings
+  const allFindings = (result.dimensions ?? []).flatMap(d => d.findings);
+  const jiCount = allFindings.filter(f => f.level === "合" || f.level === "吉").length;
+  const cautionCount = allFindings.filter(f => f.level === "慎" || f.level === "冲").length;
+
+  // 构建8个Section
+  const sections: DeepReportSection[] = [
+    buildPairSection1_ChartComparison(a, b),
+    buildPairSection2_DayPillarDeep(aDayStem, bDayStem, aDayBranch, bDayBranch, aInB, bInA),
+    buildPairSection3_ElementInteraction(a, b, nayinA, nayinB),
+    buildPairSection4_TenGodCross(aPillars, bPillars, aSS, bSS),
+    buildPairSection5_ShenShaResonance(shenA, shenB, jiA, jiB, xiongA, xiongB, aPillars[2].ganZhi, bPillars[2].ganZhi),
+    buildPairSection6_LuckSync(a.luck, b.luck, aDayBranch, bDayBranch, aSS, bSS),
+    buildPairSection7_PairSynthesis(result, crossTotal, mutualJi, mutualXiong, jiCount, cautionCount),
+    buildSoloSection8_Appendix(),
+  ];
 
   const headlineMap: Record<string, string> = {
-    "天赐良缘": "多维度高度契合", "互补良缘": "五行相生，关键维度和谐", "契合之缘": "多数维度协调", "成长之缘": "磨合中建立更深连结",
+    "天赐良缘": "多维度高度契合", "互补良缘": "五行相生，关键维度和谐",
+    "契合之缘": "多数维度协调", "成长之缘": "磨合中建立更深连结",
   };
 
   return {
