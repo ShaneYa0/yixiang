@@ -47,7 +47,7 @@ function deskTransform(ctx: CanvasRenderingContext2D, ox: number = 0, oy: number
 
 // ---- 宣纸桌面 ----
 
-export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number) {
+export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number, showTaiji: boolean = true) {
   ctx.fillStyle = PAPER_BG;
   ctx.fillRect(0, 0, w, h);
 
@@ -87,8 +87,10 @@ export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number)
     ctx.stroke();
   }
 
-  // 太极水印（斜二测椭圆）
-  drawTaijiObl(ctx, w, h);
+  // 太极水印（idle 时显示，仪式开始后消失）
+  if (showTaiji) {
+    drawTaijiObl(ctx, w, h);
+  }
 }
 
 function drawTaijiObl(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -484,7 +486,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
   const { phase, elapsedInPhase, width: w, height: h } = state;
 
   ctx.clearRect(0, 0, w, h);
-  drawPaperBg(ctx, w, h);
+  drawPaperBg(ctx, w, h, phase === "idle");
 
   const activeLines = ACTIVE_LINES[phase];
   drawYaoPlaceholders(ctx, w, h, activeLines);
@@ -492,7 +494,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
   // ---- 墨（画面中上方，在静心问卦之上） ----
   if (phase !== "idle") {
     // wy 越大越靠上（远处），h*0.35 是较远处
-    const inkCY = h * 0.35;
+    const inkCY = h * 0.12; // 太极中心
     const inkCX = w * 0.5;
 
     let inkProgress = 0;
@@ -513,7 +515,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
   if (phase === "coins" || phase === "seal" || phase === "done") {
     const coinProgress = phase === "coins" ? clamp(elapsedInPhase / 1060, 0, 1) : 1;
     // 铜钱落在墨晕附近
-    const coinCY = h * 0.38;
+    const coinCY = h * 0.18;
 
     const spacing = w * 0.10;
     const coinSpecs = [
