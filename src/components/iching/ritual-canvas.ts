@@ -96,7 +96,7 @@ function drawTaijiObl(ctx: CanvasRenderingContext2D, w: number, h: number) {
   const r = Math.min(w, h) * 0.16;
 
   ctx.save();
-  ctx.globalAlpha = 0.04;
+  ctx.globalAlpha = 0.10;
   ctx.strokeStyle = INK_COLOR;
   ctx.lineWidth = 0.8;
 
