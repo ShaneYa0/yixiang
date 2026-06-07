@@ -493,7 +493,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
   if (phase !== "idle") {
     // wy 越大越靠上（远处），h*0.35 是较远处
     const inkCY = h * 0.35;
-    const inkCX = w * 0.42;
+    const inkCX = w * 0.5;
 
     let inkProgress = 0;
     if (phase === "breath") inkProgress = clamp(elapsedInPhase / 760, 0, 1) * 0.5;
@@ -515,10 +515,11 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
     // 铜钱落在墨晕附近
     const coinCY = h * 0.38;
 
+    const spacing = w * 0.05;
     const coinSpecs = [
-      { wx: w * 0.32, wy: coinCY, delay: 0, seed: 1 },
-      { wx: w * 0.42, wy: coinCY, delay: 0.22, seed: 2 },
-      { wx: w * 0.52, wy: coinCY, delay: 0.44, seed: 3 },
+      { wx: w * 0.5 - spacing, wy: coinCY, delay: 0, seed: 1 },
+      { wx: w * 0.5, wy: coinCY, delay: 0.22, seed: 2 },
+      { wx: w * 0.5 + spacing, wy: coinCY, delay: 0.44, seed: 3 },
     ];
 
     for (const c of coinSpecs) {
