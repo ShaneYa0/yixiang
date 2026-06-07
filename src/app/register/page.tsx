@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Script from "next/script";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -15,6 +14,7 @@ declare global {
       render: (el: string | HTMLElement, opts: Record<string, unknown>) => string;
       remove: (id: string) => void;
     };
+    onTurnstileLoad?: () => void;
   }
 }
 
@@ -25,30 +25,45 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
-  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
   const turnstileRef = useRef<HTMLDivElement>(null);
+  const scriptLoaded = useRef(false);
 
   const renderTurnstile = useCallback(() => {
-    if (!window.turnstile || !turnstileRef.current || turnstileRef.current.hasAttribute("data-rendered")) return;
+    if (!window.turnstile || !turnstileRef.current || scriptLoaded.current) return;
     window.turnstile.render(turnstileRef.current, {
       sitekey: TURNSTILE_SITE_KEY,
       theme: "light",
-      callback: (token: string) => {
-        setTurnstileToken(token);
-      },
-      "expired-callback": () => {
-        setTurnstileToken("");
-      },
-      "error-callback": () => {
-        setTurnstileToken("");
-      },
+      callback: (token: string) => setTurnstileToken(token),
+      "expired-callback": () => setTurnstileToken(""),
+      "error-callback": () => setTurnstileToken(""),
     });
-    turnstileRef.current.setAttribute("data-rendered", "1");
+    scriptLoaded.current = true;
   }, []);
 
   useEffect(() => {
-    if (turnstileLoaded) renderTurnstile();
-  }, [turnstileLoaded, renderTurnstile]);
+    // Load Turnstile script dynamically
+    if (document.querySelector('script[src*="turnstile"]')) {
+      // Already loaded, just render
+      if (window.turnstile) {
+        renderTurnstile();
+      } else {
+        // Still loading, wait for callback
+        window.onTurnstileLoad = renderTurnstile;
+      }
+      return;
+    }
+
+    window.onTurnstileLoad = renderTurnstile;
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad";
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+
+    return () => {
+      window.onTurnstileLoad = undefined;
+    };
+  }, [renderTurnstile]);
 
   const submit = async () => {
     setLoading(true);
@@ -118,14 +133,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <>
-      <Script
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-        async
-        defer
-        onLoad={() => setTurnstileLoaded(true)}
-      />
-      <div className="mx-auto mt-10 max-w-md">
+    <div className="mx-auto mt-10 max-w-md">
         <Card className="p-0">
           <div className="border-b border-divider px-6 py-5">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">注册</p>
@@ -173,7 +181,7 @@ export default function RegisterPage() {
             <div ref={turnstileRef} className="flex justify-center" />
 
             <Button onClick={submit} disabled={loading || !turnstileToken} className="w-full">
-              {loading ? "注册中" : !turnstileToken && turnstileLoaded ? "等待验证..." : "注册"}
+              {loading ? "注册中" : !turnstileToken ? "等待验证..." : "注册"}
             </Button>
             {message && (
               <p className="rounded-lg bg-divider/20 px-4 py-3 text-[12px] leading-relaxed text-ink-light dark:bg-divider/10">
@@ -191,6 +199,5 @@ export default function RegisterPage() {
           </div>
         </Card>
       </div>
-    </>
   );
 }
