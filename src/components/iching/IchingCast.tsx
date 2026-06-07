@@ -152,9 +152,6 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string, y
       <h1 className="mb-2 text-xl font-medium tracking-[0.22em] text-ink">
         易经占卜
       </h1>
-      <p className="mb-7 text-[12px] tracking-[0.1em] text-ink-soft">
-        心诚则灵 · 每日免费一次
-      </p>
 
       {/* 仪式画面区 — 桌面透视 */}
       <div
