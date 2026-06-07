@@ -46,7 +46,8 @@ export function castIching(question = "", yao?: boolean[]): IchingResult {
   let index: number;
   let seed: number;
   if (yao && yao.length === 6) {
-    index = yaoToIndex(yao);
+    // 标准化为布尔：防止 JSON 解析将 true/false 变成字符串
+    index = yaoToIndex(yao.map((y) => y === true || (y as unknown as string) === "true"));
     seed = index + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
   } else {
     seed = Date.now() + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
