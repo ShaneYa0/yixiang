@@ -6,8 +6,9 @@ export type RitualPhase = "idle" | "breath" | "cloud" | "coins" | "seal" | "done
 
 const INK_COLOR = "#1a1510";
 const PAPER_BG = "#f6f1e6";
-const COIN_COLOR = "#8B7355";
-const COIN_RIM = "#6B5740";
+const COIN_FACE = "#C4A265";
+const COIN_EDGE = "#8B6914";
+const COIN_RIM = "#7A5C12";
 
 /** 每阶段激活的爻位线数 */
 export const ACTIVE_LINES: Record<RitualPhase, number> = {
@@ -21,7 +22,7 @@ export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number)
   ctx.fillStyle = PAPER_BG;
   ctx.fillRect(0, 0, w, h);
 
-  // 纸纤维肌理 — 微细随机短线条
+  // 纸纤维肌理
   ctx.strokeStyle = "rgba(170, 155, 130, 0.06)";
   ctx.lineWidth = 0.5;
   const count = Math.floor((w * h) / 6000);
@@ -36,6 +37,15 @@ export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number)
     ctx.stroke();
   }
 
+  // 桌面透视渐变：上方略深（远处）、下方略亮（近处）
+  const surfaceGrad = ctx.createLinearGradient(0, 0, 0, h);
+  surfaceGrad.addColorStop(0, "rgba(0,0,0,0.045)");
+  surfaceGrad.addColorStop(0.25, "rgba(0,0,0,0.01)");
+  surfaceGrad.addColorStop(0.6, "rgba(0,0,0,0)");
+  surfaceGrad.addColorStop(1, "rgba(0,0,0,0.025)");
+  ctx.fillStyle = surfaceGrad;
+  ctx.fillRect(0, 0, w, h);
+
   // 中央太极水印（极淡）
   drawTaijiWatermark(ctx, w / 2, h * 0.42, Math.min(w, h) * 0.18);
 }
@@ -45,18 +55,15 @@ function drawTaijiWatermark(ctx: CanvasRenderingContext2D, cx: number, cy: numbe
   ctx.globalAlpha = 0.035;
   ctx.strokeStyle = INK_COLOR;
   ctx.lineWidth = 0.8;
-  // 外圆
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.stroke();
-  // S 曲线
   ctx.beginPath();
   ctx.arc(cx, cy - r / 2, r / 2, Math.PI * 0.5, Math.PI * 1.5);
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(cx, cy + r / 2, r / 2, -Math.PI * 0.5, Math.PI * 0.5);
   ctx.stroke();
-  // 两个小圆点
   ctx.beginPath();
   ctx.arc(cx, cy - r / 2, r * 0.1, 0, Math.PI * 2);
   ctx.arc(cx, cy + r / 2, r * 0.1, 0, Math.PI * 2);
@@ -96,13 +103,20 @@ export function drawInkDrop(
   x: number, y: number,
   progress: number,
 ) {
-  const dropY = y - 60 + progress * 60;
-  const dropR = 2 + progress * 2;
+  // 透视下降：从高处落到桌面
+  const height = 1 - progress; // 1 → 0
+  const dropY = y - height * 50;
+  const dropR = 1.5 + progress * 3; // 从高空小点变大为桌面墨滴
+  const squashY = 0.3 + progress * 0.7; // 开始是竖椭圆，逐渐变成桌面圆
 
+  ctx.save();
+  ctx.translate(x, dropY);
+  ctx.scale(1, squashY);
   ctx.fillStyle = INK_COLOR;
   ctx.beginPath();
-  ctx.arc(x, dropY, dropR, 0, Math.PI * 2);
+  ctx.arc(0, 0, dropR, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 }
 
 export function drawInkDiffusion(
@@ -112,6 +126,9 @@ export function drawInkDiffusion(
 ) {
   const maxR = 160;
   const r = maxR * Math.min(progress, 1);
+  // 桌面透视：水平扩散略呈椭圆（宽 > 高）
+  const rx = r;
+  const ry = r * 0.82;
 
   const layers = [
     { r: r, inner: "rgba(26,21,16,0.45)", outer: "rgba(26,21,16,0)" },
@@ -132,8 +149,8 @@ export function drawInkDiffusion(
       const angle = (i / points) * Math.PI * 2;
       const noise = 1 + Math.sin(i * 7.3 + 1.8) * 0.08 + Math.cos(i * 11.7 + 3.1) * 0.05;
       const pr = layer.r * noise;
-      const px = cx + Math.cos(angle) * pr;
-      const py = cy + Math.sin(angle) * pr;
+      const px = cx + Math.cos(angle) * pr * (rx / r);
+      const py = cy + Math.sin(angle) * pr * (ry / r);
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     }
@@ -142,13 +159,45 @@ export function drawInkDiffusion(
   }
 }
 
-// ---- 铜钱 ----
+// ---- 铜钱（仿 3D） ----
 
-export function drawCoin(
+/** 铜钱投在桌面上的椭圆阴影 */
+function drawCoinShadow(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  heightAbove: number,
+) {
+  if (heightAbove <= 1) return;
+  const maxH = 120;
+  const t = Math.min(heightAbove / maxH, 1);
+  const alpha = 0.35 * t;
+  const blur = 3 + t * 18;
+  const offsetY = 2 + t * 14;
+  // 阴影椭圆：离桌面越高越模糊越大
+  const sx = 18 + t * 10;
+  const sy = 6 + t * 5;
+
+  // 用多层半透明椭圆模拟软阴影
+  const layers = 4;
+  for (let i = layers - 1; i >= 0; i--) {
+    const a = alpha / layers * (1 + i * 0.5);
+    const b = blur * ((i + 1) / layers);
+    ctx.fillStyle = `rgba(0,0,0,${a})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y + offsetY, sx + b, sy + b * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** 仿 3D 铜钱
+ * @param flatness 0 = 侧立（几乎看不见面），1 = 平放桌面
+ */
+function drawCoin3D(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
   rotation: number,
-  scale: number = 1,
+  scale: number,
+  flatness: number,
 ) {
   const r = 20 * scale;
   const innerR = 9 * scale;
@@ -156,59 +205,99 @@ export function drawCoin(
 
   ctx.save();
   ctx.translate(x, y);
+
+  // 扁平度映射到透视缩放
+  const perspScale = 0.55 + flatness * 0.45;  // 侧立时小，平放时大
+  const squashY = 0.08 + flatness * 0.92;       // 侧立时极扁，平放时正圆
+  const faceAlpha = 0.25 + flatness * 0.75;      // 侧立时面暗，平放时面亮
+
+  ctx.scale(perspScale, perspScale * squashY);
   ctx.rotate(rotation);
 
-  // 币身
-  ctx.fillStyle = COIN_COLOR;
-  ctx.strokeStyle = COIN_RIM;
-  ctx.lineWidth = 1.5 * scale;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // 内圈
-  ctx.strokeStyle = "rgba(90, 72, 50, 0.7)";
-  ctx.lineWidth = 0.7 * scale;
-  ctx.beginPath();
-  ctx.arc(0, 0, innerR, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // 方孔
-  ctx.fillStyle = PAPER_BG;
-  ctx.beginPath();
-  ctx.rect(-hole, -hole, hole * 2, hole * 2);
-  ctx.fill();
-
-  // 简化的字痕
-  ctx.strokeStyle = "rgba(90, 72, 50, 0.35)";
-  ctx.lineWidth = 0.5 * scale;
-  const marks = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
-  for (const angle of marks) {
-    const mx = Math.cos(angle) * (innerR + 3) * scale;
-    const my = Math.sin(angle) * (innerR + 3) * scale;
+  // ---- 边缘厚度（侧立时才可见） ----
+  if (flatness < 0.85) {
+    const edgeVis = 1 - flatness / 0.85;
+    ctx.strokeStyle = COIN_EDGE;
+    ctx.lineWidth = 4.5 * edgeVis * scale;
     ctx.beginPath();
-    ctx.moveTo(mx - 2 * scale, my);
-    ctx.lineTo(mx + 2 * scale, my);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 边缘高光
+    ctx.strokeStyle = `rgba(200, 170, 120, ${edgeVis * 0.5})`;
+    ctx.lineWidth = 1.5 * edgeVis * scale;
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 1.5, -0.3, Math.PI * 0.8);
     ctx.stroke();
   }
 
+  // ---- 币面 ----
+  ctx.fillStyle = COIN_FACE;
+  ctx.globalAlpha = faceAlpha;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 币面边缘圈
+  ctx.strokeStyle = COIN_RIM;
+  ctx.lineWidth = 1.2 * scale;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 内圈（只在足够平时可见）
+  if (flatness > 0.4) {
+    const innerVis = (flatness - 0.4) / 0.6;
+    ctx.globalAlpha = faceAlpha * innerVis;
+    ctx.strokeStyle = `rgba(100, 75, 35, ${0.7 * innerVis})`;
+    ctx.lineWidth = 0.7 * scale;
+    ctx.beginPath();
+    ctx.arc(0, 0, innerR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 方孔
+    ctx.fillStyle = PAPER_BG;
+    ctx.beginPath();
+    ctx.rect(-hole, -hole, hole * 2, hole * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(100, 75, 35, ${0.3 * innerVis})`;
+    ctx.lineWidth = 0.4 * scale;
+    ctx.stroke();
+
+    // 四字简化刻痕
+    ctx.strokeStyle = `rgba(90, 72, 50, ${0.35 * innerVis})`;
+    ctx.lineWidth = 0.5 * scale;
+    const marks = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+    for (const angle of marks) {
+      const mx = Math.cos(angle) * (innerR + 3) * scale;
+      const my = Math.sin(angle) * (innerR + 3) * scale;
+      ctx.beginPath();
+      ctx.moveTo(mx - 2 * scale, my);
+      ctx.lineTo(mx + 2 * scale, my);
+      ctx.stroke();
+    }
+  }
+
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 
-/** 在落点绘制墨迹迸溅粒子（确定性种子避免闪烁） */
+// ---- 墨迹迸溅 ----
+
 export function drawInkSplash(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number,
   intensity: number,
   seed: number = 0,
 ) {
-  const count = Math.floor(intensity * 12);
+  const count = Math.floor(intensity * 14);
   for (let i = 0; i < count; i++) {
     const a = ((seed * 137 + i * 53) % 360) * (Math.PI / 180);
-    const d = intensity * 18 * ((seed * 73 + i * 47) % 100) / 100;
+    const d = intensity * 20 * ((seed * 73 + i * 47) % 100) / 100;
     const px = cx + Math.cos(a) * d;
-    const py = cy + Math.sin(a) * d;
+    // 桌面透视：迸溅在水平面上，y 方向压缩
+    const py = cy + Math.sin(a) * d * 0.65;
     const pr = 0.5 + ((seed * 211 + i * 97) % 100) / 66;
     const alphaBase = 0.3 + ((seed * 37 + i * 59) % 100) / 250;
     ctx.fillStyle = `rgba(26,21,16,${alphaBase})`;
@@ -332,25 +421,37 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
     }
   }
 
-  // 阶段 3：铜钱
+  // 阶段 3+：仿 3D 铜钱
   if (phase === "coins" || phase === "seal" || phase === "done") {
     const coinProgress = phase === "coins" ? clamp(elapsedInPhase / 1060, 0, 1) : 1;
-    const coinY = h * 0.56;
-    const spacing = 36;
+    const surfaceY = h * 0.54; // 桌面落点
+    const spacing = 34;
     const coins = [
       { x: w / 2 - spacing, delay: 0, seed: 1 },
       { x: w / 2, delay: 0.25, seed: 2 },
       { x: w / 2 + spacing, delay: 0.5, seed: 3 },
     ];
+
     for (const c of coins) {
       const cp = clamp((coinProgress - c.delay) / 0.33, 0, 1);
       if (cp <= 0) continue;
+
+      // 下落缓动：从高处落到桌面
       const eased = easeOutBounce(cp);
-      const drawY = coinY - 80 + eased * 80;
-      const rot = eased * Math.PI * 3;
-      drawCoin(ctx, c.x, drawY, rot, 1);
+      const heightAbove = (1 - eased) * 110;       // 高度 110→0
+      const flatness = eased;                        // 0=侧立 1=平放
+      const drawY = surfaceY - heightAbove * 0.4;   // 高度映射到 Y 偏移
+      const rot = cp * Math.PI * 2.5;               // 旋转
+
+      // 先画阴影（投在桌面上）
+      drawCoinShadow(ctx, c.x, surfaceY, heightAbove);
+
+      // 画 3D 铜钱
+      drawCoin3D(ctx, c.x, drawY, rot, 1, flatness);
+
+      // 落地墨迹迸溅
       if (cp > 0.85) {
-        drawInkSplash(ctx, c.x, coinY, (cp - 0.85) / 0.15, c.seed);
+        drawInkSplash(ctx, c.x, surfaceY, (cp - 0.85) / 0.15, c.seed);
       }
     }
   }

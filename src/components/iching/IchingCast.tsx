@@ -152,12 +152,12 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
         心诚则灵 · 每日免费一次
       </p>
 
-      {/* 仪式画面区 */}
+      {/* 仪式画面区 — 桌面透视 */}
       <div
-        className={`yx-rice-paper relative mx-auto mb-6 overflow-hidden rounded-sm border transition-shadow duration-1000 ${
+        className={`yx-rice-paper relative mx-auto mb-6 overflow-hidden rounded-sm border transition-all duration-1000 ${
           ritualActive
-            ? "border-[#c4a050]/40 shadow-[0_0_60px_rgba(180,140,60,0.1)]"
-            : "border-[#d5c9b0] shadow-[0_4px_24px_rgba(44,36,22,0.06)] hover:border-[#c4a050]/50 hover:shadow-[0_4px_32px_rgba(44,36,22,0.1)]"
+            ? "border-[#c4a050]/40 shadow-[0_4px_20px_rgba(44,36,22,0.12),0_0_80px_rgba(180,140,60,0.1)]"
+            : "border-[#d5c9b0] shadow-[0_2px_12px_rgba(44,36,22,0.08),0_8px_32px_rgba(44,36,22,0.04)] hover:border-[#c4a050]/50 hover:shadow-[0_4px_20px_rgba(44,36,22,0.12),0_12px_40px_rgba(44,36,22,0.06)]"
         }`}
         style={{ aspectRatio: "1 / 1" }}
       >
