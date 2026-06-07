@@ -19,13 +19,27 @@ function getHexagram(index: number): HexagramData {
   return hexagrams[index] ?? hexagrams[0];
 }
 
-/** 六爻布尔数组 → 卦序索引（初爻=低位，true=阴爻→1） */
+/** 三爻 → 八卦名（bit0=初爻, true=阴爻, false=阳爻） */
+function trigramName(yao3: boolean[]): string {
+  const [b0, b1, b2] = yao3;
+  if (!b0 && !b1 && !b2) return "乾"; // ☰
+  if ( b0 && !b1 && !b2) return "兑"; // ☱
+  if (!b0 &&  b1 && !b2) return "离"; // ☲
+  if ( b0 &&  b1 && !b2) return "震"; // ☳
+  if (!b0 && !b1 &&  b2) return "巽"; // ☴
+  if ( b0 && !b1 &&  b2) return "坎"; // ☵
+  if (!b0 &&  b1 &&  b2) return "艮"; // ☶
+  return "坤"; // ☷
+}
+
+/** 六爻 → 在 hexagrams 数组中的位置（匹配上下卦） */
 function yaoToIndex(yao: boolean[]): number {
-  let index = 0;
-  for (let i = 0; i < 6; i++) {
-    if (yao[i]) index |= (1 << i); // true(阴爻)→1，false(阳爻)→0
-  }
-  return index % 64;
+  const lower = trigramName([yao[0], yao[1], yao[2]]); // 下卦 = 初爻+二爻+三爻
+  const upper = trigramName([yao[3], yao[4], yao[5]]); // 上卦 = 四爻+五爻+上爻
+  const found = hexagrams.findIndex(
+    (h) => h.lowerTrigram === lower && h.upperTrigram === upper,
+  );
+  return found >= 0 ? found : 0;
 }
 
 export function castIching(question = "", yao?: boolean[]): IchingResult {
