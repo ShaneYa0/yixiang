@@ -545,11 +545,10 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
     }
   }
 
-  // ---- 爻线 ----
-  if (phase === "coins" || phase === "seal" || phase === "done") {
+  // ---- 爻线（seal 开始，铜钱消失后再画） ----
+  if (phase === "seal" || phase === "done") {
     let linesToDraw = 0;
-    if (phase === "coins") linesToDraw = 1;
-    else if (phase === "seal") linesToDraw = 1 + clamp(elapsedInPhase / 1040, 0, 1) * 5;
+    if (phase === "seal") linesToDraw = clamp(elapsedInPhase / 1040, 0, 1) * 6;
     else linesToDraw = 6;
 
     drawYaoLinesStack(ctx, w, h, Math.floor(linesToDraw), Math.min(linesToDraw % 1, 0.999), yaoPattern);
