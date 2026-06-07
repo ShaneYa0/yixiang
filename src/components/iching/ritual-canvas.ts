@@ -515,7 +515,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
     // 铜钱落在墨晕附近
     const coinCY = h * 0.38;
 
-    const spacing = w * 0.05;
+    const spacing = w * 0.10;
     const coinSpecs = [
       { wx: w * 0.5 - spacing, wy: coinCY, delay: 0, seed: 1 },
       { wx: w * 0.5, wy: coinCY, delay: 0.22, seed: 2 },
