@@ -27,7 +27,7 @@ export default function BaziPage() {
   return (
     <div className="space-y-5">
       <BaziResult result={result} />
-      <BaziReading reading={result.reading} />
+      <BaziReading result={result} />
       {lastInput && <BaziDeepReportOffer result={result} input={lastInput} />}
       <button onClick={() => setResult(null)} className="mx-auto block text-[11px] tracking-[0.15em] text-ink-fade hover:text-ink">
         重新排盘

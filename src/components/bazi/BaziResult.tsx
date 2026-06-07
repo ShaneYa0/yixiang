@@ -4,8 +4,13 @@ import { PillarCard } from "@/components/ui/PillarCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SectionTitle } from "@/components/ui/SectionTitle";
 
+const elementColor: Record<string, string> = {
+  木: "#6B8C5C", 火: "#C4664A", 土: "#C4A24A", 金: "#B8A070", 水: "#5C7A9A",
+};
+
 export function BaziResult({ result }: { result: Result }) {
   const currentLuck = result.luck.currentCycle;
+  const maxElement = Math.max(...Object.values(result.elements), 1);
 
   return (
     <div className="space-y-5 pt-8">
@@ -44,7 +49,12 @@ export function BaziResult({ result }: { result: Result }) {
         <SectionTitle>五行分布</SectionTitle>
         <div className="grid gap-4 sm:grid-cols-5">
           {Object.entries(result.elements).map(([element, value]) => (
-            <ProgressBar key={element} label={element} value={value} />
+            <div key={element} className="rounded-sm border border-divider px-3 py-3" style={{ backgroundColor: `${elementColor[element]}0B`, borderColor: `${elementColor[element]}30` }}>
+              <ProgressBar label={element} value={(value / maxElement) * 100} displayValue={value} color={elementColor[element]} />
+              <div className="mt-2 text-[9px] tracking-[0.08em]">
+                <span style={{ color: elementColor[element] }}>{element === result.dayMaster ? "日主" : element === result.dominantElement ? "偏显" : value < 12 ? "不足" : "分布"}</span>
+              </div>
+            </div>
           ))}
         </div>
         <p className="mt-5 text-[13px] leading-relaxed text-ink-light">{result.summary}</p>

@@ -250,3 +250,38 @@ textarea {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
+
+@keyframes yx-orbit-draw {
+  from {
+    stroke-dashoffset: 900;
+    opacity: 0;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes yx-element-pulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+    transform-origin: center;
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.06);
+    transform-origin: center;
+  }
+}
+
+@keyframes yx-element-float {
+  0%, 100% {
+    translate: 0 0;
+    rotate: -1deg;
+  }
+  50% {
+    translate: 0 -7px;
+    rotate: 1deg;
+  }
+}

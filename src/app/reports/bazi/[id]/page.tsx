@@ -2,353 +2,244 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { BaziDeepReport } from "@/lib/bazi-deep-report";
+import type { BaziDeepReport, BaziSection, StructureData, TenGodData, TenGodCombo, CareerWealthData, RelationshipData, HealthData, LuckData, LuckCycleDetail, ConclusionData } from "@/lib/bazi-deep-report";
 
-function Stat({ value, label, note }: { value: string; label: string; note: string }) {
+// ========== Color tokens ==========
+const elColor: Record<string, string> = {
+  "木": "#6B8C5C", "火": "#C4664A", "土": "#C4A24A", "金": "#B8A070", "水": "#5C7A9A",
+};
+const elBg: Record<string, string> = {
+  "木": "rgba(107,140,92,0.07)", "火": "rgba(196,102,74,0.06)", "土": "rgba(196,162,74,0.07)", "金": "rgba(184,160,112,0.07)", "水": "rgba(92,122,154,0.06)",
+};
+const elIcon: Record<string, string> = {
+  "木": "/images/elements/wood.png", "火": "/images/elements/fire.png", "土": "/images/elements/earth.png", "金": "/images/elements/metal.png", "水": "/images/elements/water.png",
+};
+const chapterTheme = {
+  structure: { accent: "#C4A24A", soft: "rgba(196,162,74,0.07)" },
+  tenGod: { accent: "#8B6C4E", soft: "rgba(139,108,78,0.07)" },
+  career: { accent: "#6B8C5C", soft: "rgba(107,140,92,0.07)" },
+  relationship: { accent: "#A66F78", soft: "rgba(166,111,120,0.07)" },
+  health: { accent: "#5C7A9A", soft: "rgba(92,122,154,0.07)" },
+  luck: { accent: "#637C92", soft: "rgba(99,124,146,0.07)" },
+  conclusion: { accent: "#8B6C4E", soft: "rgba(139,108,78,0.07)" },
+};
+const tenGodColor: Record<string, string> = {
+  "比肩": "#6B8C5C", "劫财": "#7A8B6B", "食神": "#C4A24A", "伤官": "#C4664A",
+  "正财": "#B08A52", "偏财": "#9B7148", "正官": "#5C7A9A", "七杀": "#8B5E5E",
+  "正印": "#7A6F9B", "偏印": "#8B779B", "日主": "#8B6C4E",
+};
+
+function ChapterAccent({ color }: { color: string }) {
+  return <div className="absolute inset-x-0 top-0 h-1 origin-left" style={{ background: `linear-gradient(90deg, ${color}, ${color}35, transparent)`, animation: "marriage-line-draw 1s ease both" }} />;
+}
+
+// ========== Scroll reveal ==========
+function useReveal(thresh = 0.02) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const o = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setSeen(true); o.disconnect(); } },
+      { threshold: thresh },
+    );
+    o.observe(el);
+    return () => o.disconnect();
+  }, [thresh]);
+  return { ref, seen };
+}
+
+function Reveal({ children, className = "", delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const { ref, seen } = useReveal();
   return (
-    <div className="border border-divider bg-card p-4">
-      <div className="mb-1 text-2xl font-thin text-ink">{value}</div>
-      <div className="mb-1 text-[11px] font-semibold tracking-[0.14em] text-ink">{label}</div>
-      <div className="text-[11px] leading-5 text-ink-fade">{note}</div>
+    <div
+      ref={ref}
+      className={`transition-all duration-500 ease-out ${seen ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"} ${className}`}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      {children}
     </div>
   );
 }
 
-const elementStyles: Record<string, { accent: string; wash: string; meaning: string; image: string }> = {
-  木: { accent: "#4F7D59", wash: "#E8F0E6", meaning: "生发、规划、成长", image: "枝叶" },
-  火: { accent: "#B8643C", wash: "#F5E8DD", meaning: "表达、热度、行动", image: "火势" },
-  土: { accent: "#A8874D", wash: "#F3EDDD", meaning: "承载、稳定、资源", image: "山丘" },
-  金: { accent: "#7E8790", wash: "#ECEFF1", meaning: "规则、边界、判断", image: "矿脉" },
-  水: { accent: "#4E7892", wash: "#E4EEF3", meaning: "流动、学习、应变", image: "水纹" },
-};
+// ========== Chapter header ==========
+function ChapterHeader({ number, title, subtitle, highlights }: { number: string; title: string; subtitle?: string; highlights?: string[] }) {
+  return (
+    <div className="border-b border-divider px-7 py-5 sm:px-10">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-ink-fade">{number} / CHAPTER</p>
+      <h2 className="mt-2 text-xl font-light tracking-[0.08em] text-ink dark:text-paper">{title}</h2>
+      {subtitle && <p className="mt-2 text-[12px] leading-relaxed text-ink-light">{subtitle}</p>}
+      {highlights && highlights.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {highlights.map((h) => (
+            <span key={h} className="rounded-full border border-divider px-3 py-1 text-[10px] tracking-[0.06em] text-ink-light">{h}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-function ElementMap({ elements }: { elements: BaziDeepReport["dashboard"]["elements"] }) {
-  const max = Math.max(...elements.map((element) => element.value), 1);
-  const dominant = elements.reduce((top, element) => (element.value > top.value ? element : top), elements[0]);
-  const missing = elements.filter((element) => element.role === "不足").map((element) => element.name);
-  const useful = elements.filter((element) => element.role === "可用").map((element) => element.name);
+// ========== Pillar card grid ==========
+function PillarGrid({ pillars }: { pillars: BaziDeepReport["dashboard"]["pillars"] }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+      {pillars.map((p, i) => {
+        const ec = elColor[p.element] ?? elColor["土"];
+        return (
+          <div
+            key={p.label}
+            className="group relative overflow-hidden rounded-sm border transition-all duration-500 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(44,36,28,0.07)]"
+            style={{ borderColor: `${ec}30`, background: `linear-gradient(160deg, ${ec}0D, rgba(255,255,255,0.8))`, animation: `yx-rise 520ms ease both`, animationDelay: `${i * 60 + 60}ms` }}
+          >
+            <div className="pointer-events-none absolute -right-5 -top-4 h-24 w-24 bg-contain bg-center bg-no-repeat opacity-[0.07] transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3" style={{ backgroundImage: `url(${elIcon[p.element] ?? elIcon["土"]})` }} />
+            <div
+              className="absolute inset-x-0 top-0 h-[3px] transition-all duration-500 group-hover:opacity-90"
+              style={{ backgroundColor: ec, opacity: 0.6 }}
+            />
+            <div className="px-3 py-4 sm:px-4 sm:py-5">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-ink-fade">{p.label}</p>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="font-serif text-[28px] leading-none tracking-[0.02em] text-ink dark:text-paper sm:text-[32px]">
+                  {p.ganZhi[0]}
+                </span>
+                <span className="font-serif text-[28px] leading-none tracking-[0.02em] text-ink-light sm:text-[32px]">
+                  {p.ganZhi[1]}
+                </span>
+              </div>
+              <div
+                className="mt-1.5 inline-flex rounded-sm px-1.5 py-0.5 text-[9px] tracking-[0.1em]"
+                style={{ backgroundColor: ec + "18", color: ec }}
+              >
+                {p.element} · {p.tenGod}
+              </div>
+              <div className="mt-3 space-y-1 border-t border-divider pt-2.5">
+                <div className="text-[10px] leading-5">
+                  <span className="text-ink-fade">纳音 </span>
+                  <span className="text-ink-light">{p.nayin}</span>
+                </div>
+                <div className="text-[10px] leading-5">
+                  <span className="text-ink-fade">藏干 </span>
+                  <span className="text-ink-light">{p.hiddenTenGods.join(" · ") || "—"}</span>
+                </div>
+                {p.xunKong && (
+                  <div className="text-[10px] leading-5">
+                    <span className="text-ink-fade">旬空 </span>
+                    <span className="text-ink-light">{p.xunKong}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ========== Five-element relationship chart ==========
+function ElementBars({ elements }: { elements: BaziDeepReport["dashboard"]["elements"] }) {
+  const max = Math.max(...elements.map((e) => e.value), 1);
+  const dominant = elements.reduce((top, e) => (e.value > top.value ? e : top), elements[0]);
+  const order = ["木", "火", "土", "金", "水"];
+  const arranged = order.map((name) => elements.find((element) => element.name === name)).filter((element): element is BaziDeepReport["dashboard"]["elements"][number] => Boolean(element));
+  const points = [
+    { left: "50%", top: "2%", transform: "translateX(-50%)" },
+    { right: "2%", top: "28%" },
+    { right: "17%", bottom: "0%" },
+    { left: "17%", bottom: "0%" },
+    { left: "2%", top: "28%" },
+  ];
 
   return (
-    <div>
-      <div className="mb-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="border border-divider bg-paper/40 p-5 shadow-[inset_0_0_60px_rgba(44,36,22,0.04)]">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="mb-1 text-[11px] font-semibold tracking-[0.16em] text-ink">五行取象</div>
-              <p className="text-[12px] leading-6 text-ink-light">以五行环绕看强弱，图形越大，代表这一类气越容易主导判断。</p>
-            </div>
-            <div className="border border-ink bg-card px-3 py-2 text-right">
-              <div className="text-[10px] tracking-[0.14em] text-ink-fade">主轴</div>
-              <div className="text-2xl font-thin text-ink">{dominant.name}</div>
-            </div>
-          </div>
-          <ElementParticleField elements={elements} max={max} dominant={dominant.name} />
+    <div className="grid items-center gap-7 lg:grid-cols-[19rem_1fr]">
+      <div className="relative mx-auto aspect-square w-full max-w-[19rem]">
+        <div className="absolute inset-[13%] rounded-full opacity-60 blur-2xl" style={{ background: `radial-gradient(circle, ${elBg[dominant.name]} 0%, transparent 70%)`, animation: "yx-element-pulse 3s ease-in-out infinite" }} />
+        <div className="absolute left-1/2 top-1/2 z-10 flex h-24 w-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border border-divider bg-card/90 shadow-[0_12px_40px_rgba(44,36,28,0.08)] backdrop-blur-sm">
+          <span className="text-[9px] tracking-[0.16em] text-ink-fade">命局主轴</span>
+          <span className="mt-1 font-serif text-3xl" style={{ color: elColor[dominant.name] }}>{dominant.name}</span>
         </div>
-        <div className="border border-divider bg-card p-5">
-          <div className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-ink">五行重点</div>
-          <div className="space-y-4 text-[13px] leading-7 text-ink-light">
-            <p>
-              {dominant.name}气最显，代表{elementStyles[dominant.name]?.meaning ?? "命盘主轴"}更容易成为行事重心。它通常体现为做事时更看重稳定、承载、资源配置和现实结果。
-            </p>
-            <p>
-              {missing.length > 0 ? `${missing.join("、")}相对不足，相关事项宜主动补位。` : "五行缺口不明显，重点在平衡使用。"}
-              {useful.length > 0 ? ` 调候可借${useful.join("、")}，适合通过规则、学习、流动、人际和环境选择来平衡偏性。` : " 调候重点在避免单一优势过度消耗。"}
-            </p>
-            <p>看五行不是简单补缺，而是判断哪种气在推动选择，哪种气需要后天经营。用事时先稳住主轴，再补短板，效果会比单点用力更顺。</p>
-          </div>
-        </div>
-      </div>
-      <div className="space-y-3">
-        {elements.map((element, index) => {
-          const style = elementStyles[element.name] ?? elementStyles.土;
+        {arranged.map((element, index) => {
+          const isDominant = element.name === dominant.name;
+          const size = 64 + Math.round((element.value / max) * 26);
           return (
-            <div key={element.name} className="grid grid-cols-[32px_1fr_56px] items-center gap-3">
-              <div className="text-lg font-light text-ink">{element.name}</div>
-              <div className="h-3 overflow-hidden bg-divider">
-                <div
-                  className="h-3 animate-yx-fill"
-                  style={{
-                    width: `${Math.round((element.value / max) * 100)}%`,
-                    backgroundColor: style.accent,
-                    animationDelay: `${index * 120}ms`,
-                  }}
-                />
+            <div
+              key={element.name}
+              className="absolute z-20 flex flex-col items-center"
+              style={{ ...points[index], animation: `yx-element-float ${3.6 + index * 0.25}s ${index * 180}ms ease-in-out infinite` }}
+            >
+              <div
+                className="bg-contain bg-center bg-no-repeat drop-shadow-[0_8px_10px_rgba(44,36,28,0.18)]"
+                style={{ width: size, height: size, backgroundImage: `url(${elIcon[element.name]})`, filter: isDominant ? `drop-shadow(0 0 9px ${elColor[element.name]}80)` : undefined }}
+                role="img"
+                aria-label={`${element.name}元素`}
+              />
+              <div className="mt-1 rounded-full border border-divider bg-card/90 px-2.5 py-1 text-[9px] text-ink-fade shadow-sm backdrop-blur-sm">
+                <span className="font-medium" style={{ color: elColor[element.name] }}>{element.name}</span>
+                <span className="ml-1.5 tabular-nums">{element.value}</span>
               </div>
-              <div className="text-right text-[11px] text-ink-fade">{element.role}</div>
             </div>
           );
         })}
       </div>
+
+      <div>
+        <div className="rounded-sm border border-divider px-5 py-5" style={{ backgroundColor: elBg[dominant.name], borderColor: `${elColor[dominant.name]}40` }}>
+          <div className="text-[9px] font-semibold tracking-[0.16em]" style={{ color: elColor[dominant.name] }}>五行主轴 · {dominant.name}</div>
+          <p className="mt-3 text-[12px] leading-7 text-ink-light">
+            {dominant.name}气最显，代表{dominant.name === "木" ? "生发与规划" : dominant.name === "火" ? "表达与行动" : dominant.name === "土" ? "承载与稳定" : dominant.name === "金" ? "规则与判断" : "流动与应变"}更容易成为行事重心。
+          </p>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5 lg:grid-cols-2">
+          {arranged.map((element, index) => (
+            <div
+              key={element.name}
+              className={`group relative overflow-hidden rounded-sm border px-4 py-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(44,36,28,0.07)] ${index === arranged.length - 1 ? "lg:col-span-2" : ""}`}
+              style={{ borderColor: `${elColor[element.name]}35`, background: `linear-gradient(135deg, ${elBg[element.name]}, rgba(255,255,255,0.72))`, animation: `yx-fade-up 0.45s ease both`, animationDelay: `${300 + index * 70}ms` }}
+            >
+              <div className="pointer-events-none absolute -right-3 -top-4 h-20 w-20 bg-contain bg-center bg-no-repeat opacity-[0.11] transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3" style={{ backgroundImage: `url(${elIcon[element.name]})` }} />
+              <div className="relative flex items-start justify-between gap-3">
+                <div>
+                  <span className="font-serif text-2xl" style={{ color: elColor[element.name] }}>{element.name}</span>
+                  <div className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[8px] font-semibold tracking-[0.1em]" style={{ color: elColor[element.name], backgroundColor: `${elColor[element.name]}12` }}>{element.role}</div>
+                </div>
+                <span className="text-xl font-light tabular-nums text-ink dark:text-paper">{element.value}</span>
+              </div>
+              <div className="relative mt-4 h-1.5 overflow-hidden rounded-full bg-card/80">
+                <div className="h-full rounded-full" style={{ width: `${Math.max(6, element.value / max * 100)}%`, background: `linear-gradient(90deg, ${elColor[element.name]}90, ${elColor[element.name]})`, animation: `yx-fill 0.8s ${index * 90}ms ease both` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function elementPoint(element: string) {
-  if (element === "木") return { x: "50%", y: "16%" };
-  if (element === "火") return { x: "82%", y: "39%" };
-  if (element === "土") return { x: "70%", y: "76%" };
-  if (element === "金") return { x: "30%", y: "76%" };
-  return { x: "18%", y: "39%" };
-}
-
-function pointToNumber(point: { x: string; y: string }, width: number, height: number) {
-  return {
-    x: (Number.parseFloat(point.x) / 100) * width,
-    y: (Number.parseFloat(point.y) / 100) * height,
-  };
-}
-
-function hexToRgb(hex: string) {
-  const clean = hex.replace("#", "");
-  return {
-    r: Number.parseInt(clean.slice(0, 2), 16),
-    g: Number.parseInt(clean.slice(2, 4), 16),
-    b: Number.parseInt(clean.slice(4, 6), 16),
-  };
-}
-
-function sampleElementShape(element: string, random: () => number) {
-  const centered = () => ({ x: (random() - 0.5) * 2, y: (random() - 0.5) * 2 });
-
-  if (element === "木") {
-    const branch = random();
-    if (branch < 0.28) return { x: (random() - 0.5) * 0.18, y: random() * 1.35 - 0.2 };
-    if (branch < 0.52) return { x: -0.36 - random() * 0.34, y: -0.55 + random() * 0.5 };
-    if (branch < 0.76) return { x: 0.36 + random() * 0.34, y: -0.6 + random() * 0.55 };
-    return { x: (random() - 0.5) * 0.78, y: -0.95 + random() * 0.38 };
-  }
-
-  if (element === "火") {
-    const y = 1 - random() * 2;
-    const width = 0.18 + (1 - Math.abs(y)) * 0.55 + (y > 0.2 ? 0.18 : 0);
-    const x = (random() - 0.5) * width * 2 + Math.sin(y * 5) * 0.12;
-    return { x, y };
-  }
-
-  if (element === "土") {
-    const layer = random();
-    const y = layer < 0.42 ? 0.48 + random() * 0.45 : -0.15 + random() * 0.75;
-    const width = y > 0.45 ? 0.95 : 0.35 + y * 0.75;
-    return { x: (random() - 0.5) * width * 2, y };
-  }
-
-  if (element === "金") {
-    const y = (random() - 0.5) * 1.8;
-    const width = 0.86 - Math.abs(y) * 0.42;
-    return { x: (random() - 0.5) * width * 2, y };
-  }
-
-  const y = (random() - 0.5) * 1.35;
-  const x = (random() - 0.5) * 1.55;
-  return { x, y: y + Math.sin(x * 4.2) * 0.18 };
-}
-
-function ElementParticleField({
-  elements,
-  max,
-  dominant,
-}: {
-  elements: BaziDeepReport["dashboard"]["elements"];
-  max: number;
-  dominant: string;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const wrap = wrapRef.current;
-    if (!canvas || !wrap) return;
-
-    const context = canvas.getContext("2d");
-    if (!context) return;
-
-    let frame = 0;
-    let width = 0;
-    let height = 0;
-    let animationId = 0;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const particles = elements.flatMap((element) => {
-      const style = elementStyles[element.name] ?? elementStyles.土;
-      const rgb = hexToRgb(style.accent);
-      const count = 130 + Math.round((element.value / max) * 170);
-      return Array.from({ length: count }, (_, index) => {
-        let seed = index * 9301 + element.name.charCodeAt(0) * 49297;
-        const random = () => {
-          seed = (seed * 16807) % 2147483647;
-          return (seed - 1) / 2147483646;
-        };
-        const shape = sampleElementShape(element.name, random);
-        return {
-          element,
-          rgb,
-          localX: shape.x,
-          localY: shape.y,
-          seed,
-          speed: 0.006 + random() * 0.012,
-          radius: 0.7 + random() * 1.7 + (element.value / max) * 0.55,
-          phase: random() * Math.PI * 2,
-          tint: 0.76 + random() * 0.28,
-        };
-      });
-    });
-
-    const resize = () => {
-      const rect = wrap.getBoundingClientRect();
-      width = Math.max(320, rect.width);
-      height = Math.max(360, rect.height);
-      canvas.width = Math.floor(width * dpr);
-      canvas.height = Math.floor(height * dpr);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-
-    const draw = () => {
-      frame += 1;
-      context.clearRect(0, 0, width, height);
-      context.fillStyle = "rgba(255, 255, 255, 0.68)";
-      context.fillRect(0, 0, width, height);
-
-      const center = { x: width / 2, y: height / 2 };
-      const points = elements.map((element) => pointToNumber(elementPoint(element.name), width, height));
-
-      context.strokeStyle = "rgba(184, 168, 138, 0.22)";
-      context.lineWidth = 1;
-      context.beginPath();
-      points.forEach((point, index) => {
-        if (index === 0) context.moveTo(point.x, point.y);
-        else context.lineTo(point.x, point.y);
-      });
-      context.closePath();
-      context.stroke();
-
-      points.forEach((point) => {
-        context.beginPath();
-        context.moveTo(center.x, center.y);
-        context.lineTo(point.x, point.y);
-        context.stroke();
-      });
-
-      particles.forEach((particle) => {
-        const point = pointToNumber(elementPoint(particle.element.name), width, height);
-        const t = frame * particle.speed + particle.phase;
-        const shapeSize = 34 + (particle.element.value / max) * 42;
-        const drift = 2.5 + (particle.element.value / max) * 3.5;
-        const x = point.x + particle.localX * shapeSize + Math.cos(t + particle.localY * 2) * drift;
-        const y = point.y + particle.localY * shapeSize + Math.sin(t * 1.2 + particle.localX * 2) * drift;
-        const alpha = 0.18 + (particle.element.value / max) * 0.34;
-        const r = Math.min(255, Math.round(particle.rgb.r * particle.tint + 28 * (1 - particle.tint)));
-        const g = Math.min(255, Math.round(particle.rgb.g * particle.tint + 28 * (1 - particle.tint)));
-        const b = Math.min(255, Math.round(particle.rgb.b * particle.tint + 28 * (1 - particle.tint)));
-
-        context.beginPath();
-        context.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-        context.arc(x, y, particle.radius, 0, Math.PI * 2);
-        context.fill();
-      });
-
-      const dominantStyle = elementStyles[dominant] ?? elementStyles.土;
-      const dominantRgb = hexToRgb(dominantStyle.accent);
-      const glow = context.createRadialGradient(center.x, center.y, 4, center.x, center.y, 78);
-      glow.addColorStop(0, `rgba(${dominantRgb.r}, ${dominantRgb.g}, ${dominantRgb.b}, 0.2)`);
-      glow.addColorStop(1, "rgba(255, 255, 255, 0)");
-      context.fillStyle = glow;
-      context.beginPath();
-      context.arc(center.x, center.y, 82, 0, Math.PI * 2);
-      context.fill();
-
-      context.strokeStyle = `rgba(${dominantRgb.r}, ${dominantRgb.g}, ${dominantRgb.b}, 0.42)`;
-      context.lineWidth = 1;
-      context.beginPath();
-      context.arc(center.x, center.y, 34 + Math.sin(frame * 0.018) * 3, 0, Math.PI * 2);
-      context.stroke();
-      context.beginPath();
-      context.arc(center.x, center.y, 54 + Math.cos(frame * 0.014) * 4, 0, Math.PI * 2);
-      context.stroke();
-
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.fillStyle = "rgba(44, 36, 22, 0.86)";
-      context.font = "300 34px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      context.fillText(dominant, center.x, center.y + 2);
-      context.font = "11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-      context.fillStyle = "rgba(122, 110, 94, 0.72)";
-      context.fillText("主轴", center.x, center.y - 34);
-
-      elements.forEach((element) => {
-        const style = elementStyles[element.name] ?? elementStyles.土;
-        const point = pointToNumber(elementPoint(element.name), width, height);
-        const rgb = hexToRgb(style.accent);
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.92)`;
-        context.font = "300 30px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        context.fillText(element.name, point.x, point.y - 4);
-        context.font = "11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        context.fillStyle = "rgba(122, 110, 94, 0.76)";
-        context.fillText(`${element.role} · ${element.value}`, point.x, point.y + 26);
-      });
-
-      animationId = window.requestAnimationFrame(draw);
-    };
-
-    resize();
-    draw();
-    const observer = new ResizeObserver(resize);
-    observer.observe(wrap);
-
-    return () => {
-      window.cancelAnimationFrame(animationId);
-      observer.disconnect();
-    };
-  }, [dominant, elements, max]);
+// ========== Ten God grid ==========
+function TenGodGrid({ tenGods }: { tenGods: BaziDeepReport["dashboard"]["tenGods"] }) {
+  const visible = tenGods.slice(0, 8);
+  const max = Math.max(...visible.map((t) => t.count), 1);
 
   return (
-    <div ref={wrapRef} className="relative min-h-[420px] overflow-hidden border border-divider bg-card/70">
-      <canvas ref={canvasRef} className="absolute inset-0" aria-hidden="true" />
-    </div>
-  );
-}
-
-function pillarHint(label: string) {
-  if (label.includes("年")) return "外部环境与早年底色";
-  if (label.includes("月")) return "事业节令与现实资源";
-  if (label.includes("日")) return "自我核心与亲密关系";
-  return "后续规划与长期走向";
-}
-
-function PillarTable({ pillars }: { pillars: BaziDeepReport["dashboard"]["pillars"] }) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {pillars.map((pillar, index) => (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {visible.map((tg, i) => (
         <div
-          key={pillar.label}
-          className="animate-yx-rise border border-divider bg-card p-4 shadow-[0_16px_35px_rgba(44,36,22,0.06)] transition-transform duration-300 hover:-translate-y-1"
-          style={{ animationDelay: `${index * 120}ms` }}
+          key={tg.name}
+          className="group relative overflow-hidden rounded-sm border px-4 py-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(44,36,28,0.06)]"
+          style={{ borderColor: `${tenGodColor[tg.name] ?? "#8B6C4E"}30`, background: `linear-gradient(135deg, ${tenGodColor[tg.name] ?? "#8B6C4E"}0D, rgba(255,255,255,0.72))`, animation: `yx-fade-up 0.4s ease both`, animationDelay: `${i * 60}ms` }}
         >
-          <div className="mb-4 flex items-center justify-between">
-            <div className="text-[10px] tracking-[0.16em] text-ink-fade">{pillar.label}</div>
-            <div className="text-[10px] text-ink-soft">{pillarHint(pillar.label)}</div>
-          </div>
-          <div className="mb-4 grid grid-cols-2 overflow-hidden border border-divider text-center">
-            <div className="bg-paper/50 px-2 py-3">
-              <div className="mb-1 text-[10px] text-ink-fade">天干</div>
-              <div className="text-4xl font-thin text-ink">{pillar.ganZhi[0]}</div>
+          <span className="pointer-events-none absolute -right-1 -top-5 font-serif text-7xl opacity-[0.045] transition-transform duration-500 group-hover:scale-110" style={{ color: tenGodColor[tg.name] ?? "#8B6C4E" }}>{tg.name.slice(-1)}</span>
+          <div className="relative flex items-start justify-between gap-3">
+            <div>
+              <span className="text-lg font-light" style={{ color: tenGodColor[tg.name] ?? "#8B6C4E" }}>{tg.name}</span>
+              <p className="mt-1 text-[10px] leading-5 text-ink-fade">{tg.meaning}</p>
             </div>
-            <div className="border-l border-divider px-2 py-3">
-              <div className="mb-1 text-[10px] text-ink-fade">地支</div>
-              <div className="text-4xl font-thin text-ink">{pillar.ganZhi[1]}</div>
-            </div>
+            <span className="shrink-0 text-2xl font-light tabular-nums text-ink dark:text-paper">{tg.count}</span>
           </div>
-          <div className="mb-3 flex items-center justify-between border-b border-divider pb-3">
-            <span className="text-sm font-medium text-ink">{pillar.tenGod}</span>
-            <span className="text-[11px] text-ink-fade">纳音 {pillar.nayin}</span>
-          </div>
-          <div className="space-y-2 text-[11px] leading-5 text-ink-light">
-            <div>藏干：{pillar.hiddenTenGods.join("、")}</div>
-            <div>旬空：{pillar.xunKong}</div>
-            <div className="text-ink-soft">看法：先看{pillar.tenGod}如何落在{pillar.label}的位置。</div>
+          <div className="relative mt-3 h-1.5 overflow-hidden rounded-full bg-card/80">
+            <div className="h-full rounded-full animate-yx-fill" style={{ width: `${Math.max(4, (tg.count / max) * 100)}%`, backgroundColor: tenGodColor[tg.name] ?? "#8B6C4E", animationDelay: `${i * 80}ms` }} />
           </div>
         </div>
       ))}
@@ -356,298 +247,661 @@ function PillarTable({ pillars }: { pillars: BaziDeepReport["dashboard"]["pillar
   );
 }
 
-function TenGodPanel({ tenGods }: { tenGods: BaziDeepReport["dashboard"]["tenGods"] }) {
-  const visible = tenGods.slice(0, 8);
-  const max = Math.max(...visible.map((tenGod) => tenGod.count), 1);
+// ========== Chapter 1: 命盘格局详解 ==========
+function StructureChapter({ sec }: { sec: BaziSection & { kind: "structure" } }) {
+  const d = sec.data;
 
   return (
-    <div className="border border-divider p-5">
-      <div className="mb-4 flex items-end justify-between gap-4">
-        <div>
-          <div className="mb-1 text-[12px] font-semibold tracking-[0.16em] text-ink">十神关系</div>
-          <p className="text-[12px] leading-6 text-ink-light">看哪些关系力量重复出现，哪些会影响表达、责任、财务与边界。</p>
-        </div>
-        <div className="text-right text-[11px] text-ink-fade">强弱排序</div>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {visible.map((tenGod, index) => (
-          <div
-            key={tenGod.name}
-            className="animate-yx-rise border border-divider bg-paper/40 p-4"
-            style={{ animationDelay: `${index * 70}ms` }}
-          >
-            <div className="mb-3 flex items-start justify-between">
-              <div>
-                <div className="text-lg font-light text-ink">{tenGod.name}</div>
-                <p className="mt-1 text-[11px] leading-5 text-ink-light">{tenGod.meaning}</p>
-              </div>
-              <div className="text-2xl font-thin text-ink">x{tenGod.count}</div>
+    <Reveal delay={80}>
+      <section className="relative overflow-hidden rounded-sm border border-divider bg-card">
+        <ChapterAccent color={chapterTheme.structure.accent} />
+        <ChapterHeader number="01" title={sec.title} subtitle={sec.summary} highlights={sec.highlights} />
+
+        <div className="px-6 py-8 sm:px-10 space-y-8">
+          {/* Top stat cards */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-sm border px-5 py-5" style={{ borderColor: "rgba(107,140,92,0.2)", backgroundColor: "rgba(107,140,92,0.04)" }}>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#6B8C5C]">日主强度</p>
+              <p className="mt-3 text-3xl font-light tracking-[0.06em] text-ink dark:text-paper">{d.strengthLevel}</p>
+              <p className="mt-2 text-[11px] leading-5 text-ink-light">{d.strengthBasis.slice(0, 60)}...</p>
             </div>
-            <div className="h-2 overflow-hidden bg-divider">
-              <div className="h-2 animate-yx-fill bg-ink" style={{ width: `${Math.round((tenGod.count / max) * 100)}%`, animationDelay: `${index * 80}ms` }} />
+            <div className="rounded-sm border px-5 py-5" style={{ borderColor: "rgba(196,162,74,0.2)", backgroundColor: "rgba(196,162,74,0.04)" }}>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#C4A24A]">格局类型</p>
+              <p className="mt-3 text-3xl font-light tracking-[0.06em] text-ink dark:text-paper">{d.pattern}</p>
+              <p className="mt-2 text-[11px] leading-5 text-ink-light">{d.patternBasis}</p>
+            </div>
+            <div className="rounded-sm border px-5 py-5" style={{ borderColor: "rgba(92,122,154,0.2)", backgroundColor: "rgba(92,122,154,0.04)" }}>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#5C7A9A]">调候参考</p>
+              <p className="mt-3 text-3xl font-light tracking-[0.06em] text-ink dark:text-paper">{d.tiaoHou.join(" · ")}</p>
+              <p className="mt-2 text-[11px] leading-5 text-ink-light">用神取{d.usefulGods.join("、")}；忌神在{d.tabooGods.join("、")}</p>
             </div>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-function LuckDeepSection({ report, index }: { report: BaziDeepReport; index: number }) {
-  const current = report.dashboard.currentLuck;
-  const currentIndex = current ? report.luckTimeline.findIndex((cycle) => cycle.ganZhi === current.ganZhi && `${cycle.startYear}-${cycle.endYear}` === current.years) : -1;
-  const currentCycle = currentIndex >= 0 ? report.luckTimeline[currentIndex] : report.luckTimeline[0];
-  const nextCycle = currentIndex >= 0 ? report.luckTimeline[currentIndex + 1] : report.luckTimeline[1];
-
-  return (
-    <div className="animate-yx-rise border border-divider bg-card p-6" style={{ animationDelay: `${index * 80}ms` }}>
-      <div className="mb-2 text-[11px] tracking-[0.16em] text-ink-fade">详批 {index + 1}</div>
-      <h2 className="mb-3 text-2xl font-thin tracking-[0.12em] text-ink">大运流年详解</h2>
-      <p className="mb-5 text-[13px] leading-7 text-ink-soft">重点看当前十年的主题、下一阶段的转向，以及每一步大运该怎么取舍。</p>
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        {currentCycle && (
-          <div className="border border-ink bg-paper p-5">
-            <div className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-ink">当前十年</div>
-            <div className="mb-2 text-4xl font-thin tracking-[0.12em] text-ink">{currentCycle.ganZhi}</div>
-            <div className="mb-4 text-[12px] text-ink-fade">
-              {currentCycle.startYear}-{currentCycle.endYear} · {currentCycle.startAge}-{currentCycle.endAge}岁
-            </div>
-            <p className="text-[13px] leading-7 text-ink-light">{currentCycle.theme}</p>
+          {/* Structure body */}
+          <div className="max-w-[68ch]">
+            <p className="whitespace-pre-line text-[13px] leading-8 text-ink-light">{sec.body}</p>
           </div>
-        )}
-        <div className="border border-divider p-5">
-          <div className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-ink">接下来要观察</div>
-          {nextCycle ? (
-            <>
-              <div className="mb-2 text-3xl font-thin tracking-[0.12em] text-ink">{nextCycle.ganZhi}</div>
-              <div className="mb-4 text-[12px] text-ink-fade">
-                {nextCycle.startYear}-{nextCycle.endYear} · {nextCycle.startAge}-{nextCycle.endAge}岁
-              </div>
-              <p className="text-[13px] leading-7 text-ink-light">{nextCycle.theme}</p>
-            </>
-          ) : (
-            <p className="text-[13px] leading-7 text-ink-light">后续阶段以稳住当前节奏为先，减少无谓消耗。</p>
-          )}
-        </div>
-      </div>
-      <div className="mt-5 border border-divider bg-paper/40 p-5">
-        <div className="mb-4 text-[12px] font-semibold tracking-[0.16em] text-ink">十年流年观察点</div>
-        <div className="grid gap-2 sm:grid-cols-5">
-          {(currentCycle?.years ?? []).slice(0, 10).map((year, yearIndex) => (
-            <div key={year.year} className="animate-yx-rise border border-divider bg-card p-3" style={{ animationDelay: `${yearIndex * 45}ms` }}>
-              <div className="text-sm text-ink">{year.year}</div>
-              <div className="text-xl font-thin text-ink">{year.ganZhi}</div>
-              <div className="text-[10px] text-ink-fade">{year.age}岁</div>
-            </div>
-          ))}
-        </div>
-        <p className="mt-5 text-[13px] leading-7 text-ink-light">
-          这一段不直接下单年吉凶，而是用十年主题去看每一年：哪些年份适合推进，哪些年份适合守住资源，哪些年份要特别注意关系、健康和财务边界。
-        </p>
-      </div>
-    </div>
-  );
-}
 
-function LuckTimeline({ report }: { report: BaziDeepReport }) {
-  const current = report.dashboard.currentLuck;
-  const currentIndex = current ? report.luckTimeline.findIndex((cycle) => cycle.ganZhi === current.ganZhi && `${cycle.startYear}-${cycle.endYear}` === current.years) : -1;
-
-  return (
-    <section className="mt-5 border border-divider bg-card p-6">
-      <div className="mb-5 flex items-end justify-between gap-4">
-        <div>
-          <div className="mb-2 text-[11px] font-semibold tracking-[0.18em] text-ink">大运流年</div>
-          <p className="text-[12px] leading-6 text-ink-light">当前阶段会突出显示，前后阶段用于观察节奏变化。</p>
-        </div>
-        {currentIndex >= 0 && <div className="text-[11px] tracking-[0.14em] text-ink-fade">当前第 {currentIndex + 1} 步</div>}
-      </div>
-      <div className="relative overflow-x-auto pb-4">
-        <div className="absolute left-0 top-[74px] h-px w-full min-w-[1600px] bg-divider" />
-        <div className="flex min-w-[1600px] gap-4">
-          {report.luckTimeline.map((cycle, cycleIndex) => {
-            const isCurrent = cycleIndex === currentIndex;
-            const isNext = cycleIndex === currentIndex + 1;
-            return (
-              <div
-                key={`${cycle.ganZhi}-${cycle.startYear}`}
-                className={[
-                  "relative min-w-[245px] animate-yx-rise border p-4 transition-transform duration-300",
-                  isCurrent ? "border-ink bg-ink text-paper shadow-[0_18px_40px_rgba(44,36,22,0.18)]" : "border-divider bg-paper/30 hover:-translate-y-1",
-                ].join(" ")}
-                style={{ animationDelay: `${cycleIndex * 80}ms` }}
-              >
-                <div className={["absolute left-5 top-[66px] h-4 w-4 rounded-full border-2", isCurrent ? "border-paper bg-ink" : "border-ink bg-card"].join(" ")} />
-                <div className="mb-6 flex items-start justify-between gap-3">
-                  <div>
-                    <div className={["text-3xl font-thin tracking-[0.12em]", isCurrent ? "text-paper" : "text-ink"].join(" ")}>{cycle.ganZhi}</div>
-                    <div className={["text-[11px]", isCurrent ? "text-paper/65" : "text-ink-fade"].join(" ")}>
-                      {cycle.startYear}-{cycle.endYear}
-                    </div>
+          {/* Three palaces */}
+          <div className="border-t border-divider pt-6">
+            <h3 className="mb-4 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">胎元 · 命宫 · 身宫</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {([
+                { label: "胎元", data: d.palaces.taiYuan },
+                { label: "命宫", data: d.palaces.mingGong },
+                { label: "身宫", data: d.palaces.shenGong },
+              ]).map(({ label, data }) => (
+                <div key={label} className="group relative overflow-hidden rounded-sm border border-divider bg-card px-4 py-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(44,36,28,0.06)]">
+                  <span className="pointer-events-none absolute -right-2 -top-5 font-serif text-7xl text-ink-fade/[0.04] transition-transform duration-500 group-hover:scale-110">{data.ganZhi}</span>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-fade">{label}</p>
+                    <span className="font-serif text-xl text-ink dark:text-paper">{data.ganZhi}</span>
                   </div>
-                  {(isCurrent || isNext) && (
-                    <div className={["border px-2 py-1 text-[10px] tracking-[0.12em]", isCurrent ? "border-paper/40 text-paper" : "border-divider text-ink-fade"].join(" ")}>
-                      {isCurrent ? "当前" : "下一步"}
-                    </div>
-                  )}
+                  <p className="mt-2 text-[11px] leading-5 text-ink-light">{data.note}</p>
                 </div>
-                <p className={["mb-4 text-[13px] leading-7", isCurrent ? "text-paper/82" : "text-ink-light"].join(" ")}>
-                  {cycle.startAge}-{cycle.endAge}岁 · {cycle.theme}
-                </p>
-                <div className={["grid grid-cols-5 gap-1.5 border-t pt-3", isCurrent ? "border-paper/20" : "border-divider"].join(" ")}>
-                  {cycle.years.slice(0, 10).map((year, yearIndex) => (
-                    <div key={year.year} className={["p-1.5 text-center", isCurrent ? "bg-paper/10" : "bg-card"].join(" ")}>
-                      <div className={["text-[10px]", isCurrent ? "text-paper/62" : "text-ink-fade"].join(" ")}>{year.year}</div>
-                      <div className={["text-[11px]", isCurrent ? "text-paper" : "text-ink-light"].join(" ")}>{year.ganZhi}</div>
-                      {isCurrent && yearIndex === 0 && <div className="mt-1 h-1 bg-paper" />}
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </Reveal>
+  );
+}
+
+// ========== Chapter 2: 十神组合分析 ==========
+function TenGodChapter({ sec }: { sec: BaziSection & { kind: "tenGod" } }) {
+  const d = sec.data;
+
+  return (
+    <Reveal delay={90}>
+      <section className="relative overflow-hidden rounded-sm border border-divider bg-card">
+        <ChapterAccent color={chapterTheme.tenGod.accent} />
+        <ChapterHeader number="02" title={sec.title} subtitle={sec.summary} highlights={sec.highlights} />
+
+        <div className="px-6 py-8 sm:px-10 space-y-8">
+          {/* Pillar ten god flow */}
+          <div>
+            <h3 className="mb-4 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">四柱十神一览</h3>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+              {d.pillarBreakdown.map((p, i) => {
+                const isDay = p.label === "日柱";
+                return (
+                  <div
+                    key={p.label}
+                    className="relative overflow-hidden rounded-sm border px-4 py-4 transition-all duration-300 hover:-translate-y-0.5"
+                    style={{ borderColor: `${tenGodColor[p.stemTenGod] ?? chapterTheme.tenGod.accent}35`, backgroundColor: `${tenGodColor[p.stemTenGod] ?? chapterTheme.tenGod.accent}${isDay ? "18" : "0D"}`, animation: `yx-rise 400ms ease both`, animationDelay: `${i * 60}ms` }}
+                  >
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-ink-fade">{p.label}</p>
+                    <p className="mt-2 text-xl font-light tracking-[0.06em]" style={{ color: tenGodColor[p.stemTenGod] ?? chapterTheme.tenGod.accent }}>{p.stemTenGod}</p>
+                    <p className="mt-1.5 text-[10px] leading-5 text-ink-fade">
+                      藏：{p.branchTenGods.join(" / ")}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Frequency + combos split */}
+          <div className="grid gap-6 md:grid-cols-2 border-t border-divider pt-7">
+            {/* Ten god frequency */}
+            <div>
+              <h3 className="mb-4 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">十神频次</h3>
+              <div className="space-y-3">
+                {d.frequency.map((f, i) => (
+                  <div key={f.name} className="rounded-sm border border-divider bg-card px-4 py-3" style={{ animation: `yx-fade-up 0.35s ease both`, animationDelay: `${i * 50}ms` }}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[12px] font-medium text-ink dark:text-paper">{f.name}</span>
+                      <span className="text-lg font-light tabular-nums text-ink dark:text-paper">{f.count}</span>
+                    </div>
+                    <p className="text-[11px] leading-5 text-ink-light">{f.meaning}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Ten god combos */}
+            <div>
+              <h3 className="mb-4 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">关键组合</h3>
+              {d.combos.length > 0 ? (
+                <div className="space-y-3">
+                  {d.combos.map((combo: TenGodCombo, i: number) => (
+                    <div
+                      key={combo.name}
+                      className="rounded-sm border border-divider bg-card px-4 py-4 transition-all hover:-translate-y-0.5"
+                      style={{ animation: `yx-fade-up 0.4s ease both`, animationDelay: `${i * 80}ms` }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="h-2 w-2 rounded-full bg-[#8B6C4E]" />
+                        <span className="text-[12px] font-semibold tracking-[0.08em] text-ink dark:text-paper">{combo.name}</span>
+                      </div>
+                      <p className="text-[10px] text-ink-fade mb-2">涉及：{combo.involved} · 位于：{combo.location}</p>
+                      <p className="text-[12px] leading-6 text-ink-light">{combo.meaning}</p>
                     </div>
                   ))}
                 </div>
-              </div>
-            );
-          })}
+              ) : (
+                <p className="text-[12px] leading-7 text-ink-light">此盘十神组合以单一行星为主，未出现经典的特殊组合。判断重点在主导十神和五行流通上。</p>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </Reveal>
   );
 }
 
+// ========== Chapter 3: 事业与财运 ==========
+function CareerWealthChapter({ sec }: { sec: BaziSection & { kind: "careerWealth" } }) {
+  const d = sec.data;
+
+  return (
+    <Reveal delay={100}>
+      <section className="relative overflow-hidden rounded-sm border border-divider bg-card">
+        <ChapterAccent color={chapterTheme.career.accent} />
+        <ChapterHeader number="03" title={sec.title} subtitle={sec.summary} highlights={sec.highlights} />
+
+        <div className="px-6 py-8 sm:px-10 space-y-6">
+          {/* Key insights in two columns */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="relative overflow-hidden rounded-sm border px-5 py-5" style={{ borderColor: `${chapterTheme.career.accent}35`, backgroundColor: chapterTheme.career.soft }}>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-ink-fade">财富模式</p>
+              <p className="mt-3 text-[13px] leading-7 text-ink-light">{d.wealthType}</p>
+            </div>
+            <div className="relative overflow-hidden rounded-sm border px-5 py-5" style={{ borderColor: `${chapterTheme.structure.accent}35`, backgroundColor: chapterTheme.structure.soft }}>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-ink-fade">职业节奏</p>
+              <p className="mt-3 text-[13px] leading-7 text-ink-light">{d.careerRhythm}</p>
+            </div>
+          </div>
+
+          {/* Industries */}
+          <div className="border-t border-divider pt-5">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">适合行业方向</h3>
+            <div className="flex flex-wrap gap-2">
+              {d.industries.map((ind) => (
+                <span key={ind} className="rounded-full border border-divider bg-card px-4 py-2 text-[11px] tracking-[0.06em] text-ink-light transition-all hover:border-ink/20 hover:text-ink dark:hover:text-paper">
+                  {ind}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Risk boundary */}
+          <div className="rounded-sm border px-5 py-4" style={{ borderColor: "rgba(155,107,94,0.2)", backgroundColor: "rgba(155,107,94,0.04)" }}>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[#9B6B5E]">风险边界</p>
+            <p className="mt-2 text-[12px] leading-7 text-ink-light">{d.riskBoundary}</p>
+          </div>
+
+          {/* Body text */}
+          <div className="max-w-[68ch]">
+            <p className="whitespace-pre-line text-[13px] leading-8 text-ink-light">{sec.body}</p>
+          </div>
+        </div>
+      </section>
+    </Reveal>
+  );
+}
+
+// ========== Chapter 4: 感情与婚姻 ==========
+function RelationshipChapter({ sec }: { sec: BaziSection & { kind: "relationship" } }) {
+  const d = sec.data;
+
+  return (
+    <Reveal delay={110}>
+      <section className="relative overflow-hidden rounded-sm border border-divider bg-card">
+        <ChapterAccent color={chapterTheme.relationship.accent} />
+        <ChapterHeader number="04" title={sec.title} subtitle={sec.summary} highlights={sec.highlights} />
+
+        <div className="px-6 py-8 sm:px-10 space-y-6">
+          {/* Spouse star + Marriage palace cards */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-sm border overflow-hidden" style={{ borderColor: `${chapterTheme.relationship.accent}35`, backgroundColor: chapterTheme.relationship.soft }}>
+              <div className="border-b border-divider px-5 py-3">
+                <p className="text-[10px] font-semibold tracking-[0.14em] text-ink dark:text-paper">配偶星</p>
+              </div>
+              <div className="px-5 py-5 space-y-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div>
+                    <span className="text-[10px] tracking-[0.12em] text-ink-fade">位置 </span>
+                    <span className="text-[13px] font-medium text-ink dark:text-paper">{d.spouseStar.location}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] tracking-[0.12em] text-ink-fade">五行 </span>
+                    <span className="text-[13px] font-medium" style={{ color: elColor[d.spouseStar.element] ?? elColor["土"] }}>{d.spouseStar.element}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] tracking-[0.12em] text-ink-fade">十神 </span>
+                    <span className="text-[13px] font-medium text-ink dark:text-paper">{d.spouseStar.tenGod}</span>
+                  </div>
+                </div>
+                <p className="text-[12px] leading-7 text-ink-light">{d.spouseStar.analysis}</p>
+              </div>
+            </div>
+
+            <div className="rounded-sm border overflow-hidden" style={{ borderColor: `${chapterTheme.relationship.accent}35`, backgroundColor: chapterTheme.relationship.soft }}>
+              <div className="border-b border-divider px-5 py-3">
+                <p className="text-[10px] font-semibold tracking-[0.14em] text-ink dark:text-paper">婚姻宫</p>
+              </div>
+              <div className="px-5 py-5 space-y-3">
+                <div className="flex items-center gap-4">
+                  <span className="font-serif text-4xl text-ink dark:text-paper">{d.marriagePalace.branch}</span>
+                  <div>
+                    <span className="text-[10px] tracking-[0.12em] text-ink-fade">日支 </span>
+                    <span className="text-[13px] font-medium" style={{ color: elColor[d.marriagePalace.element] ?? elColor["土"] }}>{d.marriagePalace.element}</span>
+                  </div>
+                </div>
+                <p className="text-[12px] leading-7 text-ink-light">{d.marriagePalace.analysis}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Signals */}
+          {d.signals.length > 0 && (
+            <div className="border-t border-divider pt-5">
+              <h3 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">关键信号</h3>
+              <div className="space-y-2">
+                {d.signals.map((s, i) => (
+                  <div key={i} className="flex items-start gap-2.5 rounded-sm border border-divider bg-card px-4 py-3" style={{ animation: `yx-fade-up 0.35s ease both`, animationDelay: `${i * 60}ms` }}>
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#8B6C4E]" />
+                    <p className="text-[12px] leading-7 text-ink-light">{s}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="max-w-[68ch]">
+            <p className="whitespace-pre-line text-[13px] leading-8 text-ink-light">{sec.body}</p>
+          </div>
+        </div>
+      </section>
+    </Reveal>
+  );
+}
+
+// ========== Chapter 5: 健康与性格 ==========
+function HealthChapter({ sec }: { sec: BaziSection & { kind: "health" } }) {
+  const d = sec.data;
+
+  return (
+    <Reveal delay={120}>
+      <section className="relative overflow-hidden rounded-sm border border-divider bg-card">
+        <ChapterAccent color={chapterTheme.health.accent} />
+        <ChapterHeader number="05" title={sec.title} subtitle={sec.summary} highlights={sec.highlights} />
+
+        <div className="px-6 py-8 sm:px-10 space-y-6">
+          {/* Personality tags */}
+          <div>
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">性格倾向</h3>
+            <div className="flex flex-wrap gap-2">
+              {d.personalityTags.map((tag) => (
+                <span key={tag} className="rounded-sm border border-divider bg-card px-4 py-2.5 text-[12px] tracking-[0.06em] text-ink-light">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Element health mapping */}
+          <div className="border-t border-divider pt-5">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">五行健康映射</h3>
+            <p className="mb-4 text-[10px] tracking-[0.08em] text-ink-fade">以下为五行偏性对应的生活习惯提醒，不构成医学诊断。</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {d.elementHealth.map((eh, i) => {
+                const ec = elColor[eh.element] ?? elColor["土"];
+                const isImportant = eh.tendency.startsWith("【");
+                return (
+                  <div
+                    key={eh.element}
+                    className={`rounded-sm border px-4 py-4 ${isImportant ? "border-ink/15 bg-ink/[0.015]" : "border-divider bg-card"}`}
+                    style={{ animation: `yx-fade-up 0.4s ease both`, animationDelay: `${i * 60}ms` }}
+                  >
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <span className="font-serif text-xl" style={{ color: ec }}>{eh.element}</span>
+                      {isImportant && (
+                        <span className="rounded-full px-2 py-0.5 text-[8px] font-semibold uppercase tracking-[0.1em]" style={{ backgroundColor: ec + "20", color: ec }}>
+                          {eh.tendency.includes("偏显") ? "偏显" : "不足"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] leading-6 text-ink-fade">{eh.tendency.replace(/【偏显】|【不足】/g, "")}</p>
+                    <p className="mt-2 text-[11px] leading-6 text-ink-light">{eh.advice}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Lifestyle flags */}
+          <div className="border-t border-divider pt-5">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">生活方式提醒</h3>
+            <div className="space-y-2.5">
+              {d.lifestyleFlags.map((flag, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-sm border border-divider bg-card px-4 py-3" style={{ animation: `yx-fade-up 0.35s ease both`, animationDelay: `${i * 60}ms` }}>
+                  <span className="mt-0.5 text-[10px] tabular-nums text-ink-fade">{String(i + 1).padStart(2, "0")}</span>
+                  <p className="text-[12px] leading-7 text-ink-light">{flag}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </Reveal>
+  );
+}
+
+// ========== Chapter 6: 大运流年 ==========
+function LuckChapter({ sec }: { sec: BaziSection & { kind: "luck" } }) {
+  const d = sec.data;
+
+  return (
+    <Reveal delay={130}>
+      <section className="relative overflow-hidden rounded-sm border border-divider bg-card">
+        <ChapterAccent color={chapterTheme.luck.accent} />
+        <ChapterHeader number="06" title={sec.title} subtitle={sec.summary} highlights={sec.highlights} />
+
+        <div className="px-6 py-8 sm:px-10 space-y-6">
+          {/* Current + Next comparison */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {d.currentCycle && (
+              <div className="rounded-sm border px-5 py-5" style={{ borderColor: `${chapterTheme.luck.accent}45`, backgroundColor: chapterTheme.luck.soft }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="rounded-full bg-ink px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-paper dark:bg-paper dark:text-ink">当前大运</span>
+                </div>
+                <span className="text-3xl font-light tracking-[0.08em] text-ink dark:text-paper">{d.currentCycle.ganZhi}</span>
+                <p className="mt-1 text-[11px] tracking-[0.06em] text-ink-fade">{d.currentCycle.startYear}-{d.currentCycle.endYear} · {d.currentCycle.startAge}-{d.currentCycle.endAge}岁</p>
+                <p className="mt-3 text-[13px] leading-7 text-ink-light">{d.currentCycle.theme}</p>
+                {d.currentCycle.focusAreas.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {d.currentCycle.focusAreas.map((area) => (
+                      <span key={area} className="rounded-full border border-divider px-2.5 py-0.5 text-[10px] text-ink-fade tracking-[0.06em]">{area}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-sm border px-5 py-5" style={{ borderColor: `${chapterTheme.structure.accent}35`, backgroundColor: chapterTheme.structure.soft }}>
+              <div className="mb-3">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-fade">下一阶段</span>
+              </div>
+              {d.nextCycle ? (
+                <>
+                  <span className="text-3xl font-light tracking-[0.08em] text-ink dark:text-paper">{d.nextCycle.ganZhi}</span>
+                  <p className="mt-1 text-[11px] tracking-[0.06em] text-ink-fade">{d.nextCycle.startYear}-{d.nextCycle.endYear} · {d.nextCycle.startAge}-{d.nextCycle.endAge}岁</p>
+                  <p className="mt-3 text-[13px] leading-7 text-ink-light">{d.nextCycle.theme}</p>
+                  {d.nextCycle.focusAreas.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {d.nextCycle.focusAreas.map((area) => (
+                        <span key={area} className="rounded-full border border-divider px-2.5 py-0.5 text-[10px] text-ink-fade tracking-[0.06em]">{area}</span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="text-3xl font-light tracking-[0.08em] text-ink-fade/40">—</span>
+                  <p className="mt-3 text-[13px] leading-7 text-ink-light">后续阶段以稳住当前节奏为先。</p>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Full timeline — horizontal scroll */}
+          <div className="border-t border-divider pt-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">全部大运阶段</h3>
+              <span className="text-[10px] tabular-nums text-ink-fade">{d.cycles.length} 步大运</span>
+            </div>
+            <div className="relative overflow-x-auto pb-3">
+              <div className="flex gap-3 min-w-max">
+                {d.cycles.map((cycle, i) => {
+                  const isCurrent = d.currentCycle?.ganZhi === cycle.ganZhi && d.currentCycle?.startYear === cycle.startYear;
+                  return (
+                    <div
+                      key={`${cycle.ganZhi}-${cycle.startYear}`}
+                      className={`w-[172px] shrink-0 rounded-sm border px-4 py-4 transition-all ${isCurrent ? "border-ink/25 bg-ink/[0.03] dark:border-paper/25 dark:bg-paper/[0.02]" : "border-divider bg-card hover:-translate-y-0.5"}`}
+                      style={{ animation: `yx-rise 400ms ease both`, animationDelay: `${i * 35}ms` }}
+                    >
+                      {isCurrent && (
+                        <div className="mb-2 rounded-full bg-ink px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-paper dark:bg-paper dark:text-ink inline-block">当前</div>
+                      )}
+                      <span className="text-lg font-light tracking-[0.06em] text-ink dark:text-paper">{cycle.ganZhi}</span>
+                      <p className="mt-1 text-[10px] tracking-[0.04em] text-ink-fade">{cycle.startYear}-{cycle.endYear}</p>
+                      <p className="mt-0.5 text-[10px] text-ink-fade">{cycle.startAge}-{cycle.endAge}岁</p>
+                      <p className="mt-2 text-[11px] leading-5 text-ink-light line-clamp-2">{cycle.theme}</p>
+                      <div className="mt-3 border-t border-divider pt-2.5">
+                        {cycle.focusAreas.map((area) => (
+                          <span key={area} className="inline-block mr-1 mb-1 rounded-sm bg-divider/20 px-1.5 py-0.5 text-[9px] text-ink-fade tracking-[0.04em]">{area}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Body text */}
+          <div className="max-w-[68ch] border-t border-divider pt-5">
+            <p className="whitespace-pre-line text-[13px] leading-8 text-ink-light">{sec.body}</p>
+          </div>
+        </div>
+      </section>
+    </Reveal>
+  );
+}
+
+// ========== Chapter 7: 综合总结 ==========
+function ConclusionChapter({ sec }: { sec: BaziSection & { kind: "conclusion" } }) {
+  const d = sec.data;
+
+  return (
+    <Reveal delay={140}>
+      <section className="relative overflow-hidden rounded-sm border border-divider bg-card">
+        <ChapterAccent color={chapterTheme.conclusion.accent} />
+        <ChapterHeader number="07" title={sec.title} subtitle={sec.summary} />
+
+        <div className="px-6 py-8 sm:px-10 space-y-6">
+          {/* Core findings */}
+          <div>
+            <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">
+              核心发现
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {d.coreFindings.map((f, i) => (
+                <div
+                  key={i}
+                  className="rounded-sm border border-divider bg-card px-5 py-4 transition-all hover:-translate-y-0.5"
+                  style={{ animation: `yx-fade-up 0.4s ease both`, animationDelay: `${i * 70}ms` }}
+                >
+                  <span className="text-[10px] font-semibold tracking-[0.12em] text-ink-fade">{String(i + 1).padStart(2, "0")}</span>
+                  <p className="mt-2 text-[12px] leading-7 text-ink-light">{f}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action plan — two columns */}
+          <div className="grid gap-5 sm:grid-cols-2 border-t border-divider pt-5">
+            <div>
+              <h3 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">近期行动</h3>
+              <div className="space-y-2.5">
+                {d.nearTerm.map((item, i) => (
+                  <div key={i} className="flex items-start gap-2.5 rounded-sm border border-divider bg-card px-4 py-3" style={{ animation: `yx-fade-up 0.35s ease both`, animationDelay: `${i * 60}ms` }}>
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#6B8C5C]" />
+                    <p className="text-[12px] leading-7 text-ink-light">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">长期经营</h3>
+              <div className="space-y-2.5">
+                {d.longTerm.map((item, i) => (
+                  <div key={i} className="flex items-start gap-2.5 rounded-sm border border-divider bg-card px-4 py-3" style={{ animation: `yx-fade-up 0.35s ease both`, animationDelay: `${i * 80 + 60}ms` }}>
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#5C7A9A]" />
+                    <p className="text-[12px] leading-7 text-ink-light">{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </Reveal>
+  );
+}
+
+// ========== Main Page ==========
 export default function BaziReportPage({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState("");
   const [report, setReport] = useState<BaziDeepReport | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    params.then(({ id: nextId }) => setId(nextId));
-  }, [params]);
+  useEffect(() => { params.then(({ id }) => setId(id)); }, [params]);
 
   useEffect(() => {
     if (!id) return;
     const cached = window.sessionStorage.getItem(`yixiang:bazi-report:${id}`);
     if (cached) {
-      setReport(JSON.parse(cached) as BaziDeepReport);
-      setLoading(false);
-      return;
+      try { setReport(JSON.parse(cached)); setLoading(false); return; } catch { /* fall through */ }
     }
-
-    fetch(`/api/reports/bazi/${id}`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error("报告未找到");
-        const data = await response.json();
-        setReport(data.report);
-      })
-      .catch(() => setReport(null))
-      .finally(() => setLoading(false));
+    fetch(`/api/reports/bazi/${id}`).then(async (r) => {
+      if (!r.ok) throw new Error("");
+      setReport((await r.json()).report);
+    }).catch(() => setReport(null)).finally(() => setLoading(false));
   }, [id]);
 
   if (loading) {
-    return <div className="py-20 text-center text-sm tracking-[0.16em] text-ink-fade">详批载入中</div>;
-  }
-
-  if (!report) {
     return (
-      <div className="mx-auto max-w-xl py-16 text-center">
-        <h1 className="mb-4 text-2xl font-thin tracking-[0.16em] text-ink">详批未载入</h1>
-        <p className="mb-6 text-[13px] leading-7 text-ink-light">请从八字页重新排盘，或登录后在“我的”中查看已保存的详批。</p>
-        <Link href="/bazi" className="inline-flex min-h-11 items-center justify-center bg-ink px-7 py-3 text-sm font-medium tracking-[0.14em] text-paper">
-          返回八字页
-        </Link>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-px w-16 bg-divider animate-pulse" />
+          <p className="text-[11px] tracking-[0.2em] text-ink-fade">详批载入中</p>
+        </div>
       </div>
     );
   }
 
+  if (!report) {
+    return (
+      <div className="mx-auto max-w-lg py-24 text-center">
+        <h1 className="mb-3 text-2xl font-light tracking-[0.12em] text-ink dark:text-paper">详批未载入</h1>
+        <p className="mb-8 text-[13px] leading-7 text-ink-light">请从八字页重新排盘后解锁深度详批。</p>
+        <Link href="/bazi" className="inline-flex min-h-11 items-center justify-center rounded-lg bg-ink px-7 py-3 text-sm font-medium tracking-[0.1em] text-paper transition-opacity hover:opacity-90 dark:bg-paper dark:text-ink">返回八字页</Link>
+      </div>
+    );
+  }
+
+  // Find sections by kind
+  const structureSec = report.sections.find((s): s is BaziSection & { kind: "structure" } => s.kind === "structure");
+  const tenGodSec = report.sections.find((s): s is BaziSection & { kind: "tenGod" } => s.kind === "tenGod");
+  const careerSec = report.sections.find((s): s is BaziSection & { kind: "careerWealth" } => s.kind === "careerWealth");
+  const relationshipSec = report.sections.find((s): s is BaziSection & { kind: "relationship" } => s.kind === "relationship");
+  const healthSec = report.sections.find((s): s is BaziSection & { kind: "health" } => s.kind === "health");
+  const luckSec = report.sections.find((s): s is BaziSection & { kind: "luck" } => s.kind === "luck");
+  const conclusionSec = report.sections.find((s): s is BaziSection & { kind: "conclusion" } => s.kind === "conclusion");
+
   return (
-    <article className="pb-16 pt-4">
-      <section className="relative overflow-hidden border border-divider bg-card px-6 py-10 sm:px-10">
-        <div className="absolute right-6 top-6 text-[11px] tracking-[0.16em] text-ink-fade">已保存</div>
-        <div className="mb-6 text-[11px] tracking-[0.25em] text-ink-fade">{report.priceLabel}</div>
-        <h1 className="max-w-2xl text-4xl font-thin leading-tight tracking-[0.12em] text-ink sm:text-5xl">{report.headline}</h1>
-        <p className="mt-6 max-w-2xl text-[14px] leading-8 text-ink-light">{report.summary}</p>
-        <div className="mt-8 grid gap-3 sm:grid-cols-4">
-          {report.deliverables.map((item) => (
-            <Stat key={item.label} value={item.value} label={item.label} note={item.note} />
-          ))}
-        </div>
-      </section>
+    <article className="mx-auto max-w-3xl space-y-12 pb-24 pt-6">
+      {/* Back link */}
+      <Link href="/bazi?from=report" className="group inline-flex items-center gap-2 text-[11px] tracking-[0.12em] text-ink-fade transition-colors hover:text-ink dark:hover:text-paper">
+        <span className="inline-block transition-transform duration-300 group-hover:-translate-x-1">←</span>
+        返回八字排盘
+      </Link>
 
-      <section className="mt-5 border border-divider bg-card p-6">
-        <div className="mb-5 text-[11px] font-semibold tracking-[0.18em] text-ink">命盘总览</div>
-        <PillarTable pillars={report.dashboard.pillars} />
-        <div className="mt-5 border border-divider p-5">
-          <div className="mb-4 text-[12px] font-semibold tracking-[0.16em] text-ink">五行分布</div>
-          <ElementMap elements={report.dashboard.elements} />
-        </div>
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <TenGodPanel tenGods={report.dashboard.tenGods} />
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
-            <div className="border border-divider p-5">
-              <div className="mb-3 text-[12px] font-semibold tracking-[0.16em] text-ink">优势摘要</div>
-              <ul className="space-y-2 text-[12px] leading-6 text-ink-light">
-                {report.dashboard.strengths.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="border border-divider p-5">
-              <div className="mb-3 text-[12px] font-semibold tracking-[0.16em] text-ink">风险提醒</div>
-              <ul className="space-y-2 text-[12px] leading-6 text-ink-light">
-                {report.dashboard.risks.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
+      {/* Hero */}
+      <Reveal>
+        <header className="relative overflow-hidden rounded-sm border border-divider bg-card px-8 py-14 sm:px-12 sm:py-20">
+          <span className="pointer-events-none absolute -right-4 -top-4 select-none font-serif text-[180px] leading-none text-ink-fade/5 sm:text-[220px]" aria-hidden>命</span>
+          <div className="relative">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-ink-fade">
+              八字深度详批 · {report.priceLabel}
+            </p>
+            <h1 className="mt-6 max-w-xl text-[36px] font-light leading-[1.25] tracking-[0.06em] text-ink dark:text-paper sm:text-[44px]">
+              {report.headline}
+            </h1>
+            <div className="mt-8 h-px w-16 bg-divider origin-left" style={{ animation: "marriage-line-draw 1s 0.3s cubic-bezier(0.2,0.75,0.25,1) both" }} />
+            <p className="mt-8 max-w-xl text-[13px] leading-8 text-ink-light">{report.summary}</p>
           </div>
-        </div>
-      </section>
+        </header>
+      </Reveal>
 
-      <section className="mt-5 grid gap-4 sm:grid-cols-2">
-        {report.keyFindings.map((finding, index) => (
-          <div key={finding} className="animate-yx-rise border border-divider bg-card p-5" style={{ animationDelay: `${index * 90}ms` }}>
-            <div className="mb-2 text-[11px] tracking-[0.16em] text-ink-fade">关键结论 {index + 1}</div>
-            <p className="text-[13px] leading-7 text-ink-light">{finding}</p>
+      {/* Dashboard: 命盘总览 */}
+      <Reveal delay={50}>
+        <section className="overflow-hidden rounded-sm border border-divider bg-card">
+          <div className="border-b border-divider px-7 py-6 sm:px-10">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-ink-fade">命盘总览 / OVERVIEW</p>
+            <h2 className="mt-2 text-xl font-light tracking-[0.08em] text-ink dark:text-paper">四柱八字</h2>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-ink-light">年柱为根，月柱为苗，日柱为花，时柱为果。四柱合看，方见全貌。</p>
           </div>
-        ))}
-      </section>
+          <div className="px-5 py-7 sm:px-8 sm:py-9">
+            <PillarGrid pillars={report.dashboard.pillars} />
+          </div>
 
-      <LuckTimeline report={report} />
-
-      <section className="mt-5 space-y-5">
-        {report.sections.map((section, index) =>
-          section.title.includes("大运流年") ? (
-            <LuckDeepSection key={section.title} report={report} index={index} />
-          ) : (
-            <div key={section.title} className="animate-yx-rise border border-divider bg-card p-6" style={{ animationDelay: `${index * 80}ms` }}>
-              <div className="mb-2 text-[11px] tracking-[0.16em] text-ink-fade">详批 {index + 1}</div>
-              <h2 className="mb-3 text-2xl font-thin tracking-[0.12em] text-ink">{section.title}</h2>
-              <p className="mb-4 text-[13px] leading-7 text-ink-soft">{section.summary}</p>
-              <div className="mb-4 flex flex-wrap gap-2">
-                {section.highlights.map((highlight) => (
-                  <span key={highlight} className="bg-divider/30 px-2 py-1 text-[10px] tracking-[0.08em] text-ink-light">
-                    {highlight}
-                  </span>
-                ))}
+          <div className="border-t border-divider px-6 py-7 sm:px-10 sm:py-8 space-y-8">
+            <div>
+              <h3 className="mb-5 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">五行分布</h3>
+              <ElementBars elements={report.dashboard.elements} />
+            </div>
+            <div className="border-t border-divider pt-8">
+              <h3 className="mb-5 text-[11px] font-semibold tracking-[0.14em] text-ink dark:text-paper">十神关系</h3>
+              <TenGodGrid tenGods={report.dashboard.tenGods} />
+            </div>
+            <div className="grid gap-6 md:grid-cols-2 border-t border-divider pt-8">
+              <div>
+                <h3 className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B8C5C]">
+                  <span className="inline-block h-2 w-2 rounded-full bg-[#6B8C5C]" />优势摘要
+                </h3>
+                <div className="space-y-2">
+                  {report.dashboard.strengths.map((s, i) => (
+                    <div key={i} className="rounded-sm border px-4 py-3 transition-all duration-300 hover:-translate-y-0.5" style={{ borderColor: "rgba(107,140,92,0.22)", backgroundColor: "rgba(107,140,92,0.055)", animation: `yx-fade-up 0.35s ease both`, animationDelay: `${i * 60}ms` }}>
+                      <p className="text-[12px] leading-7 text-ink-light">{s}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <p className="text-[14px] leading-8 text-ink-light">{section.body}</p>
+              <div>
+                <h3 className="mb-4 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9B6B5E]">
+                  <span className="inline-block h-2 w-2 rounded-full bg-[#9B6B5E]" />风险提醒
+                </h3>
+                <div className="space-y-2">
+                  {report.dashboard.risks.map((r, i) => (
+                    <div key={i} className="rounded-sm border px-4 py-3 transition-all duration-300 hover:-translate-y-0.5" style={{ borderColor: "rgba(155,107,94,0.22)", backgroundColor: "rgba(155,107,94,0.05)", animation: `yx-fade-up 0.35s ease both`, animationDelay: `${i * 60 + 50}ms` }}>
+                      <p className="text-[12px] leading-7 text-ink-light">{r}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          ),
-        )}
-      </section>
+          </div>
+        </section>
+      </Reveal>
 
-      <section className="mt-5 border border-divider bg-card p-6">
-        <div className="mb-5 text-[11px] font-semibold tracking-[0.18em] text-ink">行动建议</div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          {report.actionPlan.map((group) => (
-            <div key={group.title} className="border border-divider p-5">
-              <h3 className="mb-3 text-sm font-semibold tracking-[0.14em] text-ink">{group.title}</h3>
-              <ul className="space-y-3 text-[13px] leading-7 text-ink-light">
-                {group.items.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
+      {/* Chapter sections */}
+      {structureSec && <StructureChapter sec={structureSec} />}
+      {tenGodSec && <TenGodChapter sec={tenGodSec} />}
+      {careerSec && <CareerWealthChapter sec={careerSec} />}
+      {relationshipSec && <RelationshipChapter sec={relationshipSec} />}
+      {healthSec && <HealthChapter sec={healthSec} />}
+      {luckSec && <LuckChapter sec={luckSec} />}
+      {conclusionSec && <ConclusionChapter sec={conclusionSec} />}
+
+      {/* Coda */}
+      <Reveal delay={150}>
+        <div className="text-center border-t border-divider pt-12">
+          <p className="font-serif text-6xl text-ink-fade/10 select-none">命</p>
+          <p className="mt-4 text-[12px] leading-relaxed text-ink-fade">八字命理分析属于传统文化范畴，报告内容仅供参考</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-ink-fade">命理提供概率和趋势，你的选择和行动才是决定性变量</p>
+          <Link
+            href="/bazi?from=report"
+            className="mt-8 inline-flex min-h-10 items-center justify-center rounded-full border border-divider px-6 py-2.5 text-[11px] tracking-[0.12em] text-ink-fade transition-all hover:border-ink/30 hover:text-ink dark:hover:text-paper"
+          >
+            返回八字排盘
+          </Link>
         </div>
-      </section>
+      </Reveal>
     </article>
   );
 }
