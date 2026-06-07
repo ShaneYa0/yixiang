@@ -18,30 +18,31 @@ export const ACTIVE_LINES: Record<RitualPhase, number> = {
 // ---- 斜二测投影 ----
 //
 //   X 轴：水平右，1:1
-//   Y 轴：深度方向，45° 右下，0.5:1
+//   Y 轴：深度方向，屏幕垂直向上，0.5:1
 //   Z 轴：垂直上，1:1
 //
-//   screen_x = wx + wy × cos45° × 0.5
-//   screen_y = wy × sin45° × 0.5 - wz
+//   screen_x = wx
+//   screen_y = baseY - (wy × 0.5 + wz)
 //
-//   水平面上的圆 → 45° 椭圆，ry:rx ≈ 0.354
+//   水平面上的圆 → 竖椭圆，rx:r, ry:r×0.5
 
-const Y45 = Math.cos(Math.PI / 4) * 0.5; // ≈ 0.354
-const Y_SKEW_X = Y45;
-const Y_SKEW_Y = Y45;
+const Y_SCALE = 0.5;
 
-/** 世界 3D → 屏幕 2D */
-function obl(wx: number, wy: number, wz: number): { x: number; y: number } {
+/** 世界 3D → 屏幕 2D
+ *  wy 越大 → screen_y 越小（越靠上，远处）
+ *  wz 越大 → screen_y 越小（越靠上，悬空）
+ */
+function obl(wx: number, wy: number, wz: number, h: number): { x: number; y: number } {
+  const baseY = h * 0.62; // 桌面基准线
   return {
-    x: wx + wy * Y_SKEW_X,
-    y: wy * Y_SKEW_Y - wz,
+    x: wx,
+    y: baseY - (wy * Y_SCALE + wz),
   };
 }
 
-/** 设置桌面绘图变换：在此坐标系中画正圆 = 屏幕上的斜二测椭圆 */
+/** 桌面绘图变换：正圆 → 竖椭圆（rx 不变，ry 压缩到 0.5） */
 function deskTransform(ctx: CanvasRenderingContext2D, ox: number = 0, oy: number = 0) {
-  // transform(a,b,c,d,e,f): x' = a*x + c*y + e,  y' = b*x + d*y + f
-  ctx.transform(1, 0, Y_SKEW_X, Y_SKEW_Y, ox, oy);
+  ctx.transform(1, 0, 0, Y_SCALE, ox, oy);
 }
 
 // ---- 宣纸桌面 ----
@@ -91,7 +92,7 @@ export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number)
 }
 
 function drawTaijiObl(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const p = obl(w / 2, h * 0.15, 0); // 桌面深处
+  const p = obl(w / 2, h * 0.12, 0, h);
   const r = Math.min(w, h) * 0.16;
 
   ctx.save();
@@ -153,9 +154,10 @@ export function drawInkDrop(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
   progress: number,
+  h: number,
 ) {
-  const wz = 180 * (1 - progress); // 从高处落下
-  const p = obl(x, y, wz);
+  const wz = 180 * (1 - progress);
+  const p = obl(x, y, wz, h);
   const dropR = 3 + progress * 6; // 下落中变大
 
   ctx.save();
@@ -171,10 +173,11 @@ export function drawInkDiffusion(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number,
   progress: number,
+  h: number,
 ) {
-  const maxR = 180; // 更大了
+  const maxR = 180;
   const r = maxR * Math.min(progress, 1);
-  const p = obl(cx, cy, 0);
+  const p = obl(cx, cy, 0, h);
 
   const layers = [
     { r, inner: "rgba(26,21,16,0.38)", outer: "rgba(26,21,16,0)" },
@@ -215,11 +218,12 @@ function drawCoinShadow(
   ctx: CanvasRenderingContext2D,
   wx: number, wy: number,
   heightAbove: number,
+  h: number,
 ) {
   if (heightAbove <= 4) return;
   const maxH = 160;
   const t = Math.min(heightAbove / maxH, 1);
-  const p = obl(wx, wy, 0);
+  const p = obl(wx, wy, 0, h);
 
   const alpha = 0.25 * t;
   const blur = 3 + t * 24;
@@ -297,10 +301,11 @@ function drawCoin3D(
   wx: number, wy: number, wz: number,
   rotation: number,
   flatness: number,
+  h: number,
 ) {
   const size = 22;
-  const p = obl(wx, wy, wz);       // 铜钱当前位置
-  const p0 = obl(wx, wy, 0);       // 桌面投影点
+  const p = obl(wx, wy, wz, h);
+  const p0 = obl(wx, wy, 0, h);
 
   // flatness 0→1：空中侧立 → 平贴桌面
   // 空中：在屏幕空间画圆（有钱币自身的 3D 旋转）
@@ -364,9 +369,10 @@ export function drawInkSplash(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number,
   intensity: number,
+  h: number,
   seed: number = 0,
 ) {
-  const p = obl(cx, cy, 0);
+  const p = obl(cx, cy, 0, h);
   const count = Math.floor(intensity * 14);
 
   ctx.save();
@@ -483,10 +489,10 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
   const activeLines = ACTIVE_LINES[phase];
   drawYaoPlaceholders(ctx, w, h, activeLines);
 
-  // ---- 墨（放在画面下方，更大） ----
+  // ---- 墨（画面中上方，在静心问卦之上） ----
   if (phase !== "idle") {
-    // wy 越大越靠下，h*0.55 落在画面中下方
-    const inkCY = h * 0.55;
+    // wy 越大越靠上（远处），h*0.35 是较远处
+    const inkCY = h * 0.35;
     const inkCX = w * 0.42;
 
     let inkProgress = 0;
@@ -495,25 +501,24 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
     else inkProgress = 0.85;
 
     if (inkProgress > 0) {
-      drawInkDiffusion(ctx, inkCX, inkCY, inkProgress);
+      drawInkDiffusion(ctx, inkCX, inkCY, inkProgress, h);
     }
 
     if (phase === "breath") {
-      drawInkDrop(ctx, inkCX, inkCY, clamp(elapsedInPhase / 760, 0, 1));
+      drawInkDrop(ctx, inkCX, inkCY, clamp(elapsedInPhase / 760, 0, 1), h);
     }
   }
 
-  // ---- 三枚铜钱（斜二测下落） ----
+  // ---- 三枚铜钱 ----
   if (phase === "coins" || phase === "seal" || phase === "done") {
     const coinProgress = phase === "coins" ? clamp(elapsedInPhase / 1060, 0, 1) : 1;
-    // 铜钱落在桌面中间偏下
-    const coinCY = h * 0.40;
-    const spacing = w * 0.045;
+    // 铜钱落在墨晕附近
+    const coinCY = h * 0.38;
 
     const coinSpecs = [
-      { wx: w * 0.35, wy: coinCY, delay: 0, seed: 1 },
+      { wx: w * 0.32, wy: coinCY, delay: 0, seed: 1 },
       { wx: w * 0.42, wy: coinCY, delay: 0.22, seed: 2 },
-      { wx: w * 0.49, wy: coinCY, delay: 0.44, seed: 3 },
+      { wx: w * 0.52, wy: coinCY, delay: 0.44, seed: 3 },
     ];
 
     for (const c of coinSpecs) {
@@ -523,15 +528,13 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
       const eased = easeOutBounce(cp);
       const wz = (1 - eased) * 160;
       const flatness = eased;
-      const p = obl(c.wx, c.wy, wz);
-      const deskP = obl(c.wx, c.wy, 0);
       const rot = cp * Math.PI * 2.5;
 
-      drawCoinShadow(ctx, c.wx, c.wy, wz);
-      drawCoin3D(ctx, c.wx, c.wy, wz, rot, flatness);
+      drawCoinShadow(ctx, c.wx, c.wy, wz, h);
+      drawCoin3D(ctx, c.wx, c.wy, wz, rot, flatness, h);
 
       if (cp > 0.82) {
-        drawInkSplash(ctx, c.wx, c.wy, (cp - 0.82) / 0.18, c.seed);
+        drawInkSplash(ctx, c.wx, c.wy, (cp - 0.82) / 0.18, h, c.seed);
       }
     }
   }
