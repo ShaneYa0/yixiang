@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-
-type RitualPhase = "idle" | "breath" | "cloud" | "coins" | "seal" | "done";
+import {
+  type RitualPhase,
+  renderFrame,
+} from "./ritual-canvas";
 
 const phaseLabels: Record<RitualPhase, string> = {
   idle: "静心问卦",
@@ -14,22 +16,23 @@ const phaseLabels: Record<RitualPhase, string> = {
   done: "卦象已成",
 };
 
-const activeLineCount: Record<RitualPhase, number> = {
-  idle: 0,
-  breath: 1,
-  cloud: 2,
-  coins: 4,
-  seal: 6,
-  done: 6,
+const PHASE_DURATIONS: Partial<Record<RitualPhase, number>> = {
+  breath: 760,
+  cloud: 940,
+  coins: 1060,
+  seal: 1040,
 };
 
-const yaoPattern = [false, true, false, true, true, false];
+const TOTAL_DURATION = 4300;
 
 export function IchingCast({ onCast, isCasting }: { onCast: (question: string) => void; isCasting: boolean }) {
   const [question, setQuestion] = useState("");
   const [phase, setPhase] = useState<RitualPhase>("idle");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animFrameRef = useRef<number>(0);
+  const startTimeRef = useRef<number>(0);
   const questionRef = useRef("");
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
 
   useEffect(() => {
     questionRef.current = question;
@@ -37,96 +40,161 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
 
   const ritualActive = phase !== "idle";
 
-  useEffect(() => {
-    if (!ritualActive) return;
+  // 绘制一帧（统一处理 DPR 缩放）
+  const drawFrame = useCallback((phase: RitualPhase, elapsedInPhase: number, totalElapsed: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const { w, h, dpr } = sizeRef.current;
 
-    const video = videoRef.current;
-    if (video) {
-      video.currentTime = 0;
-      video.playbackRate = 1.2;
-      void video.play();
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    renderFrame(ctx, {
+      phase,
+      elapsedInPhase,
+      totalElapsed,
+      width: w,
+      height: h,
+    });
+    ctx.restore();
+  }, []);
+
+  // 动画循环
+  useEffect(() => {
+    if (!ritualActive) {
+      drawFrame("idle", 0, 0);
+      return;
     }
 
-    const timers = [
-      window.setTimeout(() => setPhase("cloud"), 760),
-      window.setTimeout(() => setPhase("coins"), 1700),
-      window.setTimeout(() => setPhase("seal"), 2760),
-      window.setTimeout(() => setPhase("done"), 3800),
-      window.setTimeout(() => onCast(questionRef.current), 4300),
-    ];
+    startTimeRef.current = performance.now();
 
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [onCast, ritualActive]);
+    const tick = (now: number) => {
+      const totalElapsed = now - startTimeRef.current;
 
-  const startRitual = () => {
+      // 确定当前阶段
+      let currentPhase: RitualPhase = "done";
+      let phaseStart = TOTAL_DURATION;
+      let accumulated = 0;
+
+      const phaseOrder: RitualPhase[] = ["breath", "cloud", "coins", "seal"];
+      for (const p of phaseOrder) {
+        const dur = PHASE_DURATIONS[p] ?? 0;
+        if (totalElapsed >= accumulated && totalElapsed < accumulated + dur) {
+          currentPhase = p;
+          phaseStart = accumulated;
+          break;
+        }
+        accumulated += dur;
+      }
+
+      if (totalElapsed >= 3800) {
+        currentPhase = "done";
+        phaseStart = 3800;
+      }
+
+      const elapsedInPhase = totalElapsed - phaseStart;
+
+      // 更新阶段状态
+      setPhase((prev) => (prev !== currentPhase ? currentPhase : prev));
+
+      drawFrame(currentPhase, elapsedInPhase, totalElapsed);
+
+      if (totalElapsed < TOTAL_DURATION) {
+        animFrameRef.current = requestAnimationFrame(tick);
+      } else {
+        setPhase("done");
+        onCast(questionRef.current);
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animFrameRef.current);
+  }, [ritualActive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Canvas 尺寸管理
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const updateSize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      sizeRef.current = { w: rect.width, h: rect.height, dpr };
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+
+      // 重绘 idle 帧
+      if (!ritualActive) {
+        drawFrame("idle", 0, 0);
+      }
+    };
+
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, [ritualActive, drawFrame]);
+
+  const startRitual = useCallback(() => {
     if (ritualActive || isCasting) return;
     setPhase("breath");
-  };
+  }, [ritualActive, isCasting]);
 
   return (
     <div className="mx-auto max-w-2xl py-8 text-center">
-      <p className="mb-2 text-[10px] font-semibold tracking-[0.3em] text-ink-fade">一念起 · 六爻成</p>
-      <h1 className="mb-2 text-xl font-medium tracking-[0.22em] text-ink">易经占卜</h1>
-      <p className="mb-7 text-[12px] tracking-[0.1em] text-ink-soft">心诚则灵 · 每日免费一次</p>
+      <p className="mb-1 text-[10px] font-semibold tracking-[0.3em] text-ink-fade">
+        一念起 · 六爻成
+      </p>
+      <h1 className="mb-2 text-xl font-medium tracking-[0.22em] text-ink">
+        易经占卜
+      </h1>
+      <p className="mb-7 text-[12px] tracking-[0.1em] text-ink-soft">
+        心诚则灵 · 每日免费一次
+      </p>
 
-      <button
-        type="button"
-        onClick={startRitual}
-        disabled={ritualActive || isCasting}
-        aria-label={ritualActive ? "正在起卦" : "点击开始起卦"}
-        className={`group relative mx-auto mb-7 block aspect-video w-full overflow-hidden rounded-sm border border-[#604923] bg-[#0b0907] text-left shadow-[0_28px_90px_rgba(44,36,22,0.22)] transition duration-700 ${
-          ritualActive ? "ring-1 ring-[#d2ae66]/60" : "hover:border-[#a57c38] hover:shadow-[0_30px_100px_rgba(94,65,25,0.3)]"
+      {/* 仪式画面区 */}
+      <div
+        className={`yx-rice-paper relative mx-auto mb-6 overflow-hidden rounded-sm border transition-shadow duration-1000 ${
+          ritualActive
+            ? "border-[#c4a050]/40 shadow-[0_0_60px_rgba(180,140,60,0.1)]"
+            : "border-[#d5c9b0] shadow-[0_4px_24px_rgba(44,36,22,0.06)] hover:border-[#c4a050]/50 hover:shadow-[0_4px_32px_rgba(44,36,22,0.1)]"
         }`}
+        style={{ aspectRatio: "1 / 1" }}
       >
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          poster="/ritual-render.svg"
-          className={`absolute inset-0 h-full w-full object-cover transition duration-1000 ${
-            ritualActive ? "scale-[1.025] opacity-100 saturate-125" : "opacity-80 saturate-75 group-hover:opacity-95"
-          }`}
-        >
-          <source src="/videos/iching-ritual.mp4" type="video/mp4" />
-        </video>
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full"
+          style={{ display: "block" }}
+        />
 
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_25%,rgba(9,8,7,0.12)_58%,rgba(9,8,7,0.72)_100%)]" />
-        <div className={`absolute inset-0 transition duration-1000 ${ritualActive ? "bg-[#d4a84d]/[0.04]" : "bg-black/[0.08]"}`} />
-
-        <div className="absolute left-5 top-5 flex items-center gap-2 rounded-full border border-[#d7b66e]/25 bg-black/20 px-3 py-2 backdrop-blur-sm">
-          <span className={`h-1.5 w-1.5 rounded-full bg-[#e0be72] ${ritualActive ? "animate-pulse shadow-[0_0_12px_#e0be72]" : ""}`} />
-          <span className="text-[9px] tracking-[0.24em] text-[#ddc58f]">六爻问象</span>
-        </div>
-
-        <div className="absolute right-5 top-5 flex w-16 flex-col gap-1.5">
-          {yaoPattern.map((broken, index) => {
-            const lit = index < activeLineCount[phase];
-            return (
-              <div key={`${broken}-${index}`} className="flex h-1.5 gap-1">
-                {broken ? (
-                  <>
-                    <span className={`flex-1 rounded-full transition duration-700 ${lit ? "bg-[#f0d18a] shadow-[0_0_10px_#c79845]" : "bg-[#b59c70]/25"}`} />
-                    <span className={`flex-1 rounded-full transition duration-700 ${lit ? "bg-[#f0d18a] shadow-[0_0_10px_#c79845]" : "bg-[#b59c70]/25"}`} />
-                  </>
-                ) : (
-                  <span className={`flex-1 rounded-full transition duration-700 ${lit ? "bg-[#f0d18a] shadow-[0_0_10px_#c79845]" : "bg-[#b59c70]/25"}`} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#080705] via-[#080705]/75 to-transparent px-6 pb-6 pt-20 text-center">
-          <div className="text-[10px] tracking-[0.28em] text-[#e4c77e]">{phaseLabels[phase]}</div>
-          <div className="mt-2 text-xs tracking-[0.14em] text-[#cbb993]">
-            {ritualActive || isCasting ? "请保持专注，六爻正在成象" : "默想问题，点击画面或下方按钮开始"}
+        {/* 阶段标签 */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#f6f1e6] via-[#f6f1e6]/80 to-transparent pb-4 pt-14 text-center">
+          <div
+            key={phase}
+            className="text-[11px] tracking-[0.25em] text-[#8B7355]"
+            style={{ animation: "yx-fade-up 0.5s ease both" }}
+          >
+            {phaseLabels[phase]}
+          </div>
+          <div className="mt-1.5 text-[11px] tracking-[0.12em] text-ink-fade">
+            {ritualActive || isCasting
+              ? "请保持专注，六爻正在成象"
+              : "默想问题，点击画面或下方按钮开始"}
           </div>
         </div>
-      </button>
 
+        {/* 点击区域 */}
+        {!ritualActive && !isCasting && (
+          <button
+            type="button"
+            onClick={startRitual}
+            className="absolute inset-0 cursor-pointer"
+            aria-label="点击开始起卦"
+          />
+        )}
+      </div>
+
+      {/* 问题输入 */}
       <textarea
         value={question}
         onChange={(event) => setQuestion(event.target.value)}
@@ -134,7 +202,13 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
         rows={3}
         className="mb-6 w-full resize-none rounded-sm border border-divider bg-white p-4 text-sm text-ink outline-none transition placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
       />
-      <Button onClick={startRitual} disabled={ritualActive || isCasting} className="w-full">
+
+      {/* 起卦按钮 */}
+      <Button
+        onClick={startRitual}
+        disabled={ritualActive || isCasting}
+        className="w-full"
+      >
         {ritualActive || isCasting ? "起卦中" : "开始起卦"}
       </Button>
     </div>
