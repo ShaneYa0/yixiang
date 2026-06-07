@@ -33,13 +33,18 @@ export default async function MePage() {
     );
   }
 
-  const reports = user.isLocal
-    ? []
-    : await prisma.baziDeepReport.findMany({
+  let reports: unknown[] = [];
+  if (!user.isLocal) {
+    try {
+      reports = await prisma.baziDeepReport.findMany({
         where: { userId: user.id },
         orderBy: { createdAt: "desc" },
         take: 10,
       });
+    } catch {
+      reports = [];
+    }
+  }
 
   return (
     <div className="space-y-5 pt-6">

@@ -5,12 +5,21 @@ export async function ensureAppUser(user: SupabaseUser) {
   const email = user.email;
   if (!email) throw new Error("Supabase user has no email");
 
-  return prisma.user.upsert({
-    where: { id: user.id },
-    update: { email },
-    create: {
+  try {
+    return await prisma.user.upsert({
+      where: { id: user.id },
+      update: { email },
+      create: {
+        id: user.id,
+        email,
+      },
+    });
+  } catch {
+    // Return Supabase user data if Prisma DB is unreachable
+    return {
       id: user.id,
       email,
-    },
-  });
+      createdAt: new Date(),
+    };
+  }
 }

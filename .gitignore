@@ -50,3 +50,5 @@ docs/superpowers/
 # project tools
 tools/iching-ritual-video/
 backup-removed-files.zip
+
+.vercel
