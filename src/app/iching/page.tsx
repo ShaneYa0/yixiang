@@ -11,12 +11,12 @@ export default function IchingPage() {
   const [result, setResult] = useState<IchingApiResponse | null>(null);
   const [casting, setCasting] = useState(false);
 
-  const cast = async (question: string, _yao: boolean[]) => {
+  const cast = async (question: string, yao: boolean[]) => {
     setCasting(true);
     const response = await fetch("/api/iching", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, yao }),
     });
     setResult(await response.json());
     setCasting(false);

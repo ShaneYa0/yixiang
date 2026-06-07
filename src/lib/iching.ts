@@ -19,9 +19,25 @@ function getHexagram(index: number): HexagramData {
   return hexagrams[index] ?? hexagrams[0];
 }
 
-export function castIching(question = ""): IchingResult {
-  const seed = Date.now() + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const index = ((seed % 64) + 64) % 64;
+/** 六爻布尔数组 → 卦序索引（初爻=低位，true=阴爻→1） */
+function yaoToIndex(yao: boolean[]): number {
+  let index = 0;
+  for (let i = 0; i < 6; i++) {
+    if (yao[i]) index |= (1 << i); // true(阴爻)→1，false(阳爻)→0
+  }
+  return index % 64;
+}
+
+export function castIching(question = "", yao?: boolean[]): IchingResult {
+  let index: number;
+  let seed: number;
+  if (yao && yao.length === 6) {
+    index = yaoToIndex(yao);
+    seed = index + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  } else {
+    seed = Date.now() + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    index = ((seed % 64) + 64) % 64;
+  }
   const hexagram = getHexagram(index);
   const changingLine = (seed % 6) + 1;
   const changedIndex = ((index + changingLine * 7) % 64 + 64) % 64;
