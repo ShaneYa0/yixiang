@@ -67,63 +67,53 @@ function drawTaijiObl(ctx: CanvasRenderingContext2D, w: number, h: number, dark:
   ctx.save();
   deskTransform(ctx, p.x, p.y);
 
-  // 外圆底色 — 阳面（右半，亮色）
-  ctx.fillStyle = light;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 阴面（左半，暗色）— 用 clip 绘制
+  // 裁剪到外圆
   ctx.save();
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.clip();
 
-  // 左下暗色半圆
-  ctx.fillStyle = darkC;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  // 用右侧白色半圆覆盖，留下左侧暗色
-  ctx.fill();
-
-  // 上半 S 曲线：亮色向外扩展
+  // 1. 阳面底色：全圆填充亮色
   ctx.fillStyle = light;
+  ctx.fillRect(-r, -r, r * 2, r * 2);
+
+  // 2. 阴面：左半暗色
+  ctx.fillStyle = darkC;
   ctx.beginPath();
-  ctx.arc(0, -r / 2, r / 2, 0, Math.PI * 2);
+  // 左侧半圆（从顶部顺时针到右侧中间=左半）
+  ctx.arc(0, 0, r, Math.PI * 0.5, Math.PI * 1.5);
   ctx.fill();
 
-  // 下半 S 曲线：暗色向外扩展
-  ctx.fillStyle = darkC;
+  // 3. 上方小鱼：亮色圆覆盖暗色区域形成 S 下弧
+  ctx.fillStyle = light;
   ctx.beginPath();
   ctx.arc(0, r / 2, r / 2, 0, Math.PI * 2);
   ctx.fill();
 
+  // 4. 下方小鱼：暗色圆覆盖亮色区域形成 S 上弧
+  ctx.fillStyle = darkC;
+  ctx.beginPath();
+  ctx.arc(0, -r / 2, r / 2, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 
-  // 外圆描边
+  // 外圆边框
   ctx.strokeStyle = darkC;
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.stroke();
 
-  // S 曲线描边
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.arc(0, -r / 2, r / 2, Math.PI * 0.5, Math.PI * 1.5);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, r / 2, r / 2, -Math.PI * 0.5, Math.PI * 0.5);
-  ctx.stroke();
-
-  // 阴阳鱼眼
+  // 阴阳鱼眼：上阳中阴、下阴中阳
   ctx.fillStyle = darkC;
   ctx.beginPath();
-  ctx.arc(0, -r / 2, r * 0.12, 0, Math.PI * 2);
+  ctx.arc(0, -r / 2, r * 0.13, 0, Math.PI * 2);
   ctx.fill();
+
   ctx.fillStyle = light;
   ctx.beginPath();
-  ctx.arc(0, r / 2, r * 0.12, 0, Math.PI * 2);
+  ctx.arc(0, r / 2, r * 0.13, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
