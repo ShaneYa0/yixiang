@@ -1,10 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Script from "next/script";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { createClient, isSupabaseBrowserConfigured } from "@/lib/supabase/client";
+
+const TURNSTILE_SITE_KEY = "0x4AAAAAADgRs6uQdGllAQif";
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (el: string | HTMLElement, opts: Record<string, unknown>) => string;
+      remove: (id: string) => void;
+    };
+  }
+}
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -12,6 +24,31 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileLoaded, setTurnstileLoaded] = useState(false);
+  const turnstileRef = useRef<HTMLDivElement>(null);
+
+  const renderTurnstile = useCallback(() => {
+    if (!window.turnstile || !turnstileRef.current || turnstileRef.current.hasAttribute("data-rendered")) return;
+    window.turnstile.render(turnstileRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: "light",
+      callback: (token: string) => {
+        setTurnstileToken(token);
+      },
+      "expired-callback": () => {
+        setTurnstileToken("");
+      },
+      "error-callback": () => {
+        setTurnstileToken("");
+      },
+    });
+    turnstileRef.current.setAttribute("data-rendered", "1");
+  }, []);
+
+  useEffect(() => {
+    if (turnstileLoaded) renderTurnstile();
+  }, [turnstileLoaded, renderTurnstile]);
 
   const submit = async () => {
     setLoading(true);
@@ -29,6 +66,23 @@ export default function RegisterPage() {
     }
     if (password !== confirmPassword) {
       setMessage("两次输入的密码不一致");
+      setLoading(false);
+      return;
+    }
+    if (!turnstileToken) {
+      setMessage("请等待人机验证完成");
+      setLoading(false);
+      return;
+    }
+
+    // Verify Turnstile token server-side
+    const verifyRes = await fetch("/api/auth/verify-turnstile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: turnstileToken }),
+    });
+    if (!verifyRes.ok) {
+      setMessage("人机验证失败，请刷新页面重试");
       setLoading(false);
       return;
     }
@@ -64,67 +118,79 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="mx-auto mt-10 max-w-md">
-      <Card className="p-0">
-        <div className="border-b border-divider px-6 py-5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">注册</p>
-          <h2 className="mt-2 text-lg font-semibold tracking-[0.08em] text-ink dark:text-paper">创建账户</h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-ink-light">
-            注册后可查看八字详批、姻缘深度解读等全部内容
-          </p>
-        </div>
-        <div className="space-y-4 px-6 py-5">
-          <label className="block">
-            <span className="text-[11px] font-medium tracking-[0.12em] text-ink-fade">邮箱地址</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              className="mt-2 min-h-12 w-full border border-divider bg-white px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium tracking-[0.12em] text-ink-fade">密码</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="至少 6 位"
-              autoComplete="new-password"
-              className="mt-2 min-h-12 w-full border border-divider bg-white px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] font-medium tracking-[0.12em] text-ink-fade">确认密码</span>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="再次输入密码"
-              autoComplete="new-password"
-              className="mt-2 min-h-12 w-full border border-divider bg-white px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
-            />
-          </label>
-          <Button onClick={submit} disabled={loading} className="w-full">
-            {loading ? "注册中" : "注册"}
-          </Button>
-          {message && (
-            <p className="rounded-lg bg-divider/20 px-4 py-3 text-[12px] leading-relaxed text-ink-light dark:bg-divider/10">
-              {message}
-            </p>
-          )}
-          <div className="border-t border-divider pt-4 text-center">
-            <p className="text-[12px] text-ink-fade">
-              已有账户？{" "}
-              <Link href="/login" className="text-ink underline underline-offset-4 hover:opacity-70 dark:text-paper">
-                去登录
-              </Link>
+    <>
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        async
+        defer
+        onLoad={() => setTurnstileLoaded(true)}
+      />
+      <div className="mx-auto mt-10 max-w-md">
+        <Card className="p-0">
+          <div className="border-b border-divider px-6 py-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">注册</p>
+            <h2 className="mt-2 text-lg font-semibold tracking-[0.08em] text-ink dark:text-paper">创建账户</h2>
+            <p className="mt-1 text-[13px] leading-relaxed text-ink-light">
+              注册后可查看八字详批、姻缘深度解读等全部内容
             </p>
           </div>
-        </div>
-      </Card>
-    </div>
+          <div className="space-y-4 px-6 py-5">
+            <label className="block">
+              <span className="text-[11px] font-medium tracking-[0.12em] text-ink-fade">邮箱地址</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="mt-2 min-h-12 w-full border border-divider bg-white px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[11px] font-medium tracking-[0.12em] text-ink-fade">密码</span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="至少 6 位"
+                autoComplete="new-password"
+                className="mt-2 min-h-12 w-full border border-divider bg-white px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[11px] font-medium tracking-[0.12em] text-ink-fade">确认密码</span>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="再次输入密码"
+                autoComplete="new-password"
+                className="mt-2 min-h-12 w-full border border-divider bg-white px-3.5 text-sm text-ink outline-none transition-colors placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
+              />
+            </label>
+
+            {/* Turnstile widget */}
+            <div ref={turnstileRef} className="flex justify-center" />
+
+            <Button onClick={submit} disabled={loading || !turnstileToken} className="w-full">
+              {loading ? "注册中" : !turnstileToken && turnstileLoaded ? "等待验证..." : "注册"}
+            </Button>
+            {message && (
+              <p className="rounded-lg bg-divider/20 px-4 py-3 text-[12px] leading-relaxed text-ink-light dark:bg-divider/10">
+                {message}
+              </p>
+            )}
+            <div className="border-t border-divider pt-4 text-center">
+              <p className="text-[12px] text-ink-fade">
+                已有账户？{" "}
+                <Link href="/login" className="text-ink underline underline-offset-4 hover:opacity-70 dark:text-paper">
+                  去登录
+                </Link>
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </>
   );
 }
