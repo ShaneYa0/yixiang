@@ -251,14 +251,46 @@ textarea {
   to { transform: scaleX(1); }
 }
 
-@keyframes yx-orbit-draw {
-  from {
-    stroke-dashoffset: 900;
+/* ===== 易经起卦 · 水墨仪式动画 ===== */
+
+@keyframes yx-ink-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(180, 140, 60, 0);
+  }
+  50% {
+    box-shadow: 0 0 40px 2px rgba(180, 140, 60, 0.18);
+  }
+}
+
+@keyframes yx-coin-drop {
+  0% {
+    transform: translateY(-120px) rotate(0deg);
     opacity: 0;
   }
-  to {
-    stroke-dashoffset: 0;
+  60% {
     opacity: 1;
+  }
+  85% {
+    transform: translateY(4px) rotate(540deg);
+  }
+  92% {
+    transform: translateY(-2px) rotate(560deg);
+  }
+  100% {
+    transform: translateY(0) rotate(580deg);
+  }
+}
+
+@keyframes yx-gua-reveal {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
   }
 }
 
@@ -284,4 +316,13 @@ textarea {
     translate: 0 -7px;
     rotate: 1deg;
   }
+}
+
+/* 宣纸纹理背景 */
+.yx-rice-paper {
+  background-color: #f6f1e6;
+  background-image:
+    radial-gradient(ellipse at 50% 40%, rgba(200, 180, 150, 0.12) 0%, transparent 70%),
+    radial-gradient(circle at 30% 60%, rgba(180, 160, 130, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 70% 30%, rgba(190, 175, 145, 0.05) 0%, transparent 50%);
 }
