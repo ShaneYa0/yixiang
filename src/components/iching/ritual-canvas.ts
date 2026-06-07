@@ -480,10 +480,11 @@ export interface RenderState {
   totalElapsed: number;
   width: number;
   height: number;
+  yaoPattern: boolean[];
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
-  const { phase, elapsedInPhase, width: w, height: h } = state;
+  const { phase, elapsedInPhase, width: w, height: h, yaoPattern } = state;
 
   ctx.clearRect(0, 0, w, h);
   drawPaperBg(ctx, w, h, phase === "idle");
@@ -491,8 +492,10 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
   const activeLines = ACTIVE_LINES[phase];
   drawYaoPlaceholders(ctx, w, h, activeLines);
 
-  // ---- 墨（画面中上方，在静心问卦之上） ----
-  if (phase !== "idle") {
+  const showInkCoins = phase === "breath" || phase === "cloud" || phase === "coins";
+
+  // ---- 墨 ----
+  if (showInkCoins) {
     // wy 越大越靠上（远处），h*0.35 是较远处
     const inkCY = h * 0.12; // 太极中心
     const inkCX = w * 0.5;
@@ -511,8 +514,8 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
     }
   }
 
-  // ---- 三枚铜钱 ----
-  if (phase === "coins" || phase === "seal" || phase === "done") {
+  // ---- 三枚铜钱（仅 coins 阶段，seal 起消失） ----
+  if (showInkCoins && phase === "coins") {
     const coinProgress = phase === "coins" ? clamp(elapsedInPhase / 1060, 0, 1) : 1;
     // 铜钱落在墨晕附近
     const coinCY = h * 0.18;
@@ -549,7 +552,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
     else if (phase === "seal") linesToDraw = 1 + clamp(elapsedInPhase / 1040, 0, 1) * 5;
     else linesToDraw = 6;
 
-    drawYaoLinesStack(ctx, w, h, Math.floor(linesToDraw), Math.min(linesToDraw % 1, 0.999));
+    drawYaoLinesStack(ctx, w, h, Math.floor(linesToDraw), Math.min(linesToDraw % 1, 0.999), yaoPattern);
   }
 
   if (phase === "done") {
@@ -562,10 +565,10 @@ function drawYaoLinesStack(
   w: number, h: number,
   fullLines: number,
   partialProgress: number,
+  yaoPattern: boolean[],
 ) {
   const baseY = h * 0.68;
   const lineW = w * 0.48;
-  const yaoPattern = [false, true, false, true, true, false];
 
   for (let i = 0; i < fullLines; i++) {
     const y = baseY - i * (h * 0.088);

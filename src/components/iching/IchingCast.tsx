@@ -25,13 +25,14 @@ const PHASE_DURATIONS: Partial<Record<RitualPhase, number>> = {
 
 const TOTAL_DURATION = 4300;
 
-export function IchingCast({ onCast, isCasting }: { onCast: (question: string) => void; isCasting: boolean }) {
+export function IchingCast({ onCast, isCasting }: { onCast: (question: string, yao: boolean[]) => void; isCasting: boolean }) {
   const [question, setQuestion] = useState("");
   const [phase, setPhase] = useState<RitualPhase>("idle");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animFrameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
   const questionRef = useRef("");
+  const yaoRef = useRef<boolean[]>([]);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
 
   const ritualActive = phase !== "idle";
 
-  // 绘制一帧（统一处理 DPR 缩放）
+  // 绘制一帧
   const drawFrame = useCallback((phase: RitualPhase, elapsedInPhase: number, totalElapsed: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -56,6 +57,7 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
       totalElapsed,
       width: w,
       height: h,
+      yaoPattern: yaoRef.current,
     });
     ctx.restore();
   }, []);
@@ -104,7 +106,7 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
         animFrameRef.current = requestAnimationFrame(tick);
       } else {
         setPhase("done");
-        onCast(questionRef.current);
+        onCast(questionRef.current, yaoRef.current);
       }
     };
 
@@ -137,6 +139,8 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
 
   const startRitual = useCallback(() => {
     if (ritualActive || isCasting) return;
+    // 随机生成六爻：true=阴爻(断开), false=阳爻(连线)
+    yaoRef.current = Array.from({ length: 6 }, () => Math.random() < 0.5);
     setPhase("breath");
   }, [ritualActive, isCasting]);
 
