@@ -33,7 +33,7 @@ export default async function MePage() {
     );
   }
 
-  let reports: unknown[] = [];
+  let reports: { id: string; birthDate: Date; birthHour: number }[] = [];
   if (!user.isLocal) {
     try {
       reports = await prisma.baziDeepReport.findMany({
