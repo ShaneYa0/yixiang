@@ -51,42 +51,6 @@ export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number,
   ctx.fillStyle = PAPER_BG;
   ctx.fillRect(0, 0, w, h);
 
-  // 纸纤维肌理
-  ctx.strokeStyle = "rgba(170, 155, 130, 0.06)";
-  ctx.lineWidth = 0.5;
-  const count = Math.floor((w * h) / 6000);
-  for (let i = 0; i < count; i++) {
-    const x = ((i * 173 + 37) % w);
-    const y = ((i * 211 + 59) % h);
-    const len = 2 + (i % 5);
-    const angle = ((i * 73) % 360) * (Math.PI / 180);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
-    ctx.stroke();
-  }
-
-  // 桌面深度渐变
-  const depth = ctx.createLinearGradient(0, 0, 0, h);
-  depth.addColorStop(0, "rgba(0,0,0,0.08)");
-  depth.addColorStop(0.3, "rgba(0,0,0,0.02)");
-  depth.addColorStop(0.65, "rgba(0,0,0,0)");
-  depth.addColorStop(1, "rgba(0,0,0,0.06)");
-  ctx.fillStyle = depth;
-  ctx.fillRect(0, 0, w, h);
-
-  // 斜二测桌面参考线（极淡）
-  ctx.strokeStyle = "rgba(160, 140, 110, 0.04)";
-  ctx.lineWidth = 0.5;
-  const step = h / 6;
-  for (let i = 1; i < 6; i++) {
-    const y = step * i;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
-  }
-
   // 太极水印（idle 时显示，仪式开始后消失）
   if (showTaiji) {
     drawTaijiObl(ctx, w, h);
