@@ -32,22 +32,30 @@ function trigramName(yao3: boolean[]): string {
   return "坤"; // ☷
 }
 
-/** 六爻 → 在 hexagrams 数组中的位置（匹配上下卦） */
-function yaoToIndex(yao: boolean[]): number {
-  const lower = trigramName([yao[0], yao[1], yao[2]]); // 下卦 = 初爻+二爻+三爻
-  const upper = trigramName([yao[3], yao[4], yao[5]]); // 上卦 = 四爻+五爻+上爻
-  const found = hexagrams.findIndex(
-    (h) => h.lowerTrigram === lower && h.upperTrigram === upper,
-  );
-  return found >= 0 ? found : 0;
+/** 六爻 → 卦序索引 0-63（纯静态映射，客户端安全） */
+export function getHexagramIndex(yao: boolean[]): number {
+  const lower = trigramName([yao[0], yao[1], yao[2]]);
+  const upper = trigramName([yao[3], yao[4], yao[5]]);
+  return HEXAGRAM_INDEX_MAP[`${upper}:${lower}`] ?? 0;
 }
 
-export function castIching(question = "", yao?: boolean[]): IchingResult {
+/** 上下卦名 → 文王卦序 0-63（由实际数据文件自动生成，勿手动编辑） */
+const HEXAGRAM_INDEX_MAP: Record<string, number> = {
+  "乾:乾":0,"坤:坤":1,"坎:震":2,"艮:坎":3,"坎:乾":4,"乾:坎":5,"坤:坎":6,"坎:坤":7,
+  "巽:乾":8,"乾:兑":9,"坤:乾":10,"乾:坤":11,"乾:离":12,"离:乾":13,"坤:艮":14,"震:坤":15,
+  "兑:震":16,"艮:巽":17,"坤:兑":18,"巽:坤":19,"离:震":20,"艮:离":21,"艮:坤":22,"坤:震":23,
+  "乾:震":24,"艮:乾":25,"艮:震":26,"兑:巽":27,"坎:坎":28,"离:离":29,"兑:艮":30,"震:巽":31,
+  "乾:艮":32,"震:乾":33,"离:坤":34,"坤:离":35,"巽:离":36,"离:兑":37,"坎:艮":38,"震:坎":39,
+  "艮:兑":40,"巽:震":41,"兑:乾":42,"乾:巽":43,"兑:坤":44,"坤:巽":45,"兑:坎":46,"坎:巽":47,
+  "兑:离":48,"离:巽":49,"震:震":50,"艮:艮":51,"巽:艮":52,"震:兑":53,"震:离":54,"离:艮":55,
+  "巽:巽":56,"兑:兑":57,"巽:坎":58,"坎:兑":59,"巽:兑":60,"震:艮":61,"坎:离":62,"离:坎":63,
+};
+
+export function castIching(question = "", hexagramIndex?: number): IchingResult {
   let index: number;
   let seed: number;
-  if (yao && yao.length === 6) {
-    // 标准化为布尔：防止 JSON 解析将 true/false 变成字符串
-    index = yaoToIndex(yao.map((y) => y === true || (y as unknown as string) === "true"));
+  if (hexagramIndex !== undefined && hexagramIndex >= 0 && hexagramIndex < 64) {
+    index = hexagramIndex;
     seed = index + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
   } else {
     seed = Date.now() + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
