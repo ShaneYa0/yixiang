@@ -105,13 +105,13 @@ function drawTaijiObl(ctx: CanvasRenderingContext2D, w: number, h: number, dark:
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.stroke();
 
-  // 阴阳鱼眼：上阳中阴、下阴中阳
-  ctx.fillStyle = darkC;
+  // 鱼眼：白中黑、黑中白
+  ctx.fillStyle = light;
   ctx.beginPath();
   ctx.arc(0, -r / 2, r * 0.13, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = light;
+  ctx.fillStyle = darkC;
   ctx.beginPath();
   ctx.arc(0, r / 2, r * 0.13, 0, Math.PI * 2);
   ctx.fill();
