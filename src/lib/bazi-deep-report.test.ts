@@ -18,7 +18,7 @@ describe("buildBaziDeepReport", () => {
     // Basic metadata
     expect(report.id).toMatch(/^bazi-/);
     expect(report.ownerEmail).toBe("user@example.com");
-    expect(report.priceLabel).toBe("首份免费");
+    expect(report.priceLabel).toBe("完整详批");
     expect(report.headline).toContain("日主");
     expect(report.summary).toContain("详批");
 
@@ -119,9 +119,9 @@ describe("buildBaziDeepReport", () => {
     expect(s1.data.strengthBasis).not.toBe(s2.data.strengthBasis);
   });
 
-  it("returns paid price label for paid source", () => {
+  it("returns price label", () => {
     const bazi = calculateBazi({ birthDate: "1994-06-12", birthHour: 8, gender: "male" });
-    const report = buildBaziDeepReport(bazi, { ownerEmail: "vip@b.com", source: "paid" });
-    expect(report.priceLabel).toBe("单次详批");
+    const report = buildBaziDeepReport(bazi);
+    expect(report.priceLabel).toBe("完整详批");
   });
 });

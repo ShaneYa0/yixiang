@@ -1,7 +1,29 @@
 import hexagrams from "@/lib/iching-data";
 import type { HexagramData } from "@/lib/iching-data";
 
+// ── 六爻起卦类型 ──
+
+/**
+ * 单爻的四种状态，由三枚铜钱的正反面决定：
+ *   0 = 老阴（三反）→ 阴爻，动爻，将变为阳
+ *   1 = 少阴（一反两正）→ 阴爻，不变
+ *   2 = 少阳（一正两反）→ 阳爻，不变
+ *   3 = 老阳（三正）→ 阳爻，动爻，将变为阴
+ */
+export type LineValue = 0 | 1 | 2 | 3;
+
+export function isYin(l: LineValue): boolean {
+  return l < 2; // 0老阴, 1少阴 → 阴爻
+}
+
+export function isChanging(l: LineValue): boolean {
+  return l === 0 || l === 3; // 老阴或老阳 → 动爻
+}
+
+// ── 类型 ──
+
 export type IchingResult = {
+  lineValues: LineValue[];           // 原始六爻值，固定从初爻到上爻
   hexagramNumber: number;
   hexagramChar: string;
   chineseName: string;
@@ -9,37 +31,34 @@ export type IchingResult = {
   lowerTrigram: string;
   judgment: string;
   image: string;
-  changingLine: number;
-  changingLineText?: string;
-  changedHexagram?: { number: number; name: string; char: string; judgment: string };
+  changingLines: number[];           // 动爻位置（1-6），空数组=静卦
+  changingLinesText: string[];       // 每条动爻的爻辞
+  changedHexagram?: {
+    number: number;
+    name: string;
+    char: string;
+    judgment: string;
+  };
 };
 
+// ── 工具 ──
+
 function getHexagram(index: number): HexagramData {
-  // index is 0-63
   return hexagrams[index] ?? hexagrams[0];
 }
 
-/** 三爻 → 八卦名（bit0=初爻, true=阴爻, false=阳爻） */
 function trigramName(yao3: boolean[]): string {
   const [b0, b1, b2] = yao3;
-  if (!b0 && !b1 && !b2) return "乾"; // ☰
-  if ( b0 && !b1 && !b2) return "兑"; // ☱
-  if (!b0 &&  b1 && !b2) return "离"; // ☲
-  if ( b0 &&  b1 && !b2) return "震"; // ☳
-  if (!b0 && !b1 &&  b2) return "巽"; // ☴
-  if ( b0 && !b1 &&  b2) return "坎"; // ☵
-  if (!b0 &&  b1 &&  b2) return "艮"; // ☶
-  return "坤"; // ☷
+  if (!b0 && !b1 && !b2) return "乾";
+  if (!b0 && !b1 &&  b2) return "兑";
+  if (!b0 &&  b1 && !b2) return "离";
+  if (!b0 &&  b1 &&  b2) return "震";
+  if ( b0 && !b1 && !b2) return "巽";
+  if ( b0 && !b1 &&  b2) return "坎";
+  if ( b0 &&  b1 && !b2) return "艮";
+  return "坤";
 }
 
-/** 六爻 → 卦序索引 0-63（纯静态映射，客户端安全） */
-export function getHexagramIndex(yao: boolean[]): number {
-  const lower = trigramName([yao[0], yao[1], yao[2]]);
-  const upper = trigramName([yao[3], yao[4], yao[5]]);
-  return HEXAGRAM_INDEX_MAP[`${upper}:${lower}`] ?? 0;
-}
-
-/** 上下卦名 → 文王卦序 0-63（由实际数据文件自动生成，勿手动编辑） */
 const HEXAGRAM_INDEX_MAP: Record<string, number> = {
   "乾:乾":0,"坤:坤":1,"坎:震":2,"艮:坎":3,"坎:乾":4,"乾:坎":5,"坤:坎":6,"坎:坤":7,
   "巽:乾":8,"乾:兑":9,"坤:乾":10,"乾:坤":11,"乾:离":12,"离:乾":13,"坤:艮":14,"震:坤":15,
@@ -51,22 +70,81 @@ const HEXAGRAM_INDEX_MAP: Record<string, number> = {
   "巽:巽":56,"兑:兑":57,"巽:坎":58,"坎:兑":59,"巽:兑":60,"震:艮":61,"坎:离":62,"离:坎":63,
 };
 
-export function castIching(question = "", hexagramIndex?: number): IchingResult {
-  let index: number;
-  let seed: number;
-  if (hexagramIndex !== undefined && hexagramIndex >= 0 && hexagramIndex < 64) {
-    index = hexagramIndex;
-    seed = index + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  } else {
-    seed = Date.now() + [...question].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    index = ((seed % 64) + 64) % 64;
+/** yao[i] = true(阴) / false(阳)，从初爻到上爻 */
+export function getHexagramIndex(yao: boolean[]): number {
+  const lower = trigramName([yao[0], yao[1], yao[2]]);
+  const upper = trigramName([yao[3], yao[4], yao[5]]);
+  return HEXAGRAM_INDEX_MAP[`${upper}:${lower}`] ?? 0;
+}
+
+// ── 核心：三钱六摇起卦 ──
+
+/** 抛一枚铜钱 */
+function tossOneCoin(): boolean {
+  return Math.random() < 0.5;
+}
+
+/** 抛三枚铜钱，返回 0-3（正面数） */
+function tossThreeCoins(): number {
+  let heads = 0;
+  for (let i = 0; i < 3; i++) {
+    if (tossOneCoin()) heads++;
   }
+  return heads;
+  // 0 → 老阴（概率 1/8）
+  // 1 → 少阴（概率 3/8）
+  // 2 → 少阳（概率 3/8）
+  // 3 → 老阳（概率 1/8）
+}
+
+/** 完整起卦：抛六次铜钱，返回六条爻（从初爻到上爻） */
+export function castYao(): LineValue[] {
+  return Array.from({ length: 6 }, () => tossThreeCoins() as LineValue);
+}
+
+// ── 核心：根据爻值计算卦象 ──
+
+/**
+ * 根据六条爻值计算完整的起卦结果。
+ * @param lineValues 六条爻值（coins[0]=初爻, coins[5]=上爻）
+ */
+export function castIching(lineValues: LineValue[]): IchingResult {
+  // 阴阳分布 → 本卦
+  const yao = lineValues.map((l) => isYin(l)); // true=阴
+  const index = getHexagramIndex(yao);
   const hexagram = getHexagram(index);
-  const changingLine = (seed % 6) + 1;
-  const changedIndex = ((index + changingLine * 7) % 64 + 64) % 64;
-  const changedHexagram = getHexagram(changedIndex);
+
+  // 动爻
+  const changingLines: number[] = [];
+  const changingLinesText: string[] = [];
+  const POS_NAMES = ["初", "二", "三", "四", "五", "上"];
+
+  lineValues.forEach((l, i) => {
+    if (isChanging(l)) {
+      changingLines.push(i + 1); // 1-6
+      changingLinesText.push(`第${POS_NAMES[i]}爻动：${hexagram.lines[i]}`);
+    }
+  });
+
+  // 变卦：翻转动爻
+  let changedHexagram: IchingResult["changedHexagram"];
+  if (changingLines.length > 0) {
+    const changedYao = [...yao];
+    for (const pos of changingLines) {
+      changedYao[pos - 1] = !changedYao[pos - 1];
+    }
+    const changedIndex = getHexagramIndex(changedYao);
+    const changed = getHexagram(changedIndex);
+    changedHexagram = {
+      number: changed.index,
+      name: changed.name,
+      char: changed.char,
+      judgment: changed.judgment,
+    };
+  }
 
   return {
+    lineValues: [...lineValues],
     hexagramNumber: hexagram.index,
     hexagramChar: hexagram.char,
     chineseName: hexagram.name,
@@ -74,69 +152,77 @@ export function castIching(question = "", hexagramIndex?: number): IchingResult 
     lowerTrigram: hexagram.lowerTrigram,
     judgment: hexagram.judgment,
     image: hexagram.image,
-    changingLine,
-    changingLineText: `第${changingLine}爻动：${hexagram.lines[changingLine - 1]}`,
-    changedHexagram: {
-      number: changedHexagram.index,
-      name: changedHexagram.name,
-      char: changedHexagram.char,
-      judgment: changedHexagram.judgment,
-    },
+    changingLines,
+    changingLinesText,
+    changedHexagram,
   };
 }
 
-export function getIchingFreeReading(result: IchingResult) {
+// ── 解读生成 ──
+
+export function getIchingFreeReading(result: IchingResult): string {
   return [
     explainGua(result),
-    explainLine(result),
+    explainLines(result),
     explainChanged(result),
     adviceItems(result).join("\n"),
   ].join("\n---\n");
 }
 
-/** 卦辞白话解释 */
 function explainGua(r: IchingResult): string {
   const upper = r.upperTrigram;
   const lower = r.lowerTrigram;
   const name = r.chineseName;
-
-  // 根据卦名和上下卦关系给出白话解读
-  const dynamic = `${upper}在上、${lower}在下`; // e.g. "离在上、坎在下"
+  const dynamic = `${upper}在上、${lower}在下`;
   const pair = upperLowerRelation(upper, lower);
-
   return `${name}，${dynamic}。${pair}\n\n"${r.judgment.split("。")[0]}"——这句话的意思是：${simplifyJudgment(r)}`;
 }
 
-/** 动爻白话解释 */
-function explainLine(r: IchingResult): string {
-  const pos = r.changingLine;
-  const stageText = ["", "事情刚刚起步，还在摸索阶段", "有了初步进展，但还不够稳固", "小有成就，需要稳住阵脚", "进入关键转折点，面临重要选择", "发展到了高峰，要把握好度", "事情接近尾声，宜回顾总结"][pos];
+function explainLines(r: IchingResult): string {
+  if (r.changingLines.length === 0) {
+    return "本卦为静卦，六爻皆不动。以本卦卦辞为主进行判断，卦象所揭示的趋势较为稳定持久。若需更具体的行动指引，可参考本卦的彖辞和象辞。";
+  }
 
-  return `当前动在${["", "初", "二", "三", "四", "五", "上"][pos]}爻。${stageText}。\n\n这一爻提醒你：${simplifyLine(r.changingLineText ?? "")}`;
+  return r.changingLines
+    .map((pos, idx) => {
+      const stageText = [
+        "", "事情刚刚起步，还在摸索阶段", "有了初步进展，但还不够稳固",
+        "小有成就，需要稳住阵脚", "进入关键转折点，面临重要选择",
+        "发展到了高峰，要把握好度", "事情接近尾声，宜回顾总结",
+      ][pos];
+      const lineText = r.changingLinesText[idx] || "";
+      return `动在${["", "初", "二", "三", "四", "五", "上"][pos]}爻。${stageText}。\n\n这一爻提醒你：${simplifyLine(lineText)}`;
+    })
+    .join("\n\n");
 }
 
-/** 变卦白话解释 */
 function explainChanged(r: IchingResult): string {
-  if (!r.changedHexagram) return "本卦无动爻，以当前卦象为主。";
+  if (!r.changedHexagram) {
+    return "本卦为静卦，无变卦。以本卦卦象和卦辞为主，当下的局面较为稳定。";
+  }
   const from = r.chineseName;
   const to = r.changedHexagram.name;
-  return `从「${from}」变到「${to}」，代表事情会朝这个方向发展。\n\n"${r.changedHexagram.judgment.split("。")[0]}"——意思是：${simplifyChangedJudgment(r.changedHexagram.judgment)}`;
+  const lineDesc = r.changingLines.length === 1
+    ? `因第${r.changingLines[0]}爻变动`
+    : `因第${r.changingLines.join("、")}爻共${r.changingLines.length}处变动`;
+  return `从「${from}」变到「${to}」(${lineDesc})，代表事情会朝此方向发展。\n\n"${r.changedHexagram.judgment.split("。")[0]}"——意思是：${simplifyChangedJudgment(r.changedHexagram.judgment)}`;
 }
 
-/** 综合建议 */
 function adviceItems(r: IchingResult): string[] {
   const items = [
     `当前局面：${describeSituation(r)}`,
     `行动方向：${describeAction(r)}`,
-    `注意事项：${describeCaution(r)}`,
   ];
+  if (r.changingLines.length > 0) {
+    items.push(`注意事项：${describeCaution(r)}`);
+  }
   if (r.changedHexagram) {
     items.push(`后续走势：从「${r.chineseName}」走向「${r.changedHexagram.name}」，${describeTrend(r)}`);
   }
   return items;
 }
 
-// ---- 辅助函数 ----
+// ── 辅助解读 ──
 
 function upperLowerRelation(upper: string, lower: string): string {
   const relations: Record<string, Record<string, string>> = {
@@ -145,12 +231,9 @@ function upperLowerRelation(upper: string, lower: string): string {
     "坎": { "离": "水在火上，水火既济，事情已经完成但需守住成果" },
     "离": { "坎": "火在水上，水火未交，事情尚未完成需要继续努力" },
   };
-
-  // 通用描述
   const upperNature = trigramNature(upper);
   const lowerNature = trigramNature(lower);
   const specific = relations[upper]?.[lower];
-
   if (specific) return specific;
   if (upper === lower) return `两${upper}相叠，${upperNature}的力量加倍，宜顺势集中发力。`;
   return `上${upper}（${upperNature}）下${lower}（${lowerNature}），${upperNature}在外主导，${lowerNature}在内支撑。`;
@@ -204,9 +287,13 @@ function describeSituation(r: IchingResult): string {
 }
 
 function describeAction(r: IchingResult): string {
-  const pos = r.changingLine;
-  if (pos <= 2) return "事情还在早期，重点是把基础打牢，不要急于求成。";
-  if (pos <= 4) return "现在到了关键节点，需要做出明确选择，犹豫反而错失机会。";
+  if (r.changingLines.length === 0) {
+    return "静卦意味着当前局面稳定，宜顺势守成，不必急于改变。";
+  }
+  // 以最上面的动爻为主
+  const topLine = Math.max(...r.changingLines);
+  if (topLine <= 2) return "事情还在早期，重点是把基础打牢，不要急于求成。";
+  if (topLine <= 4) return "现在到了关键节点，需要做出明确选择，犹豫反而错失机会。";
   return "事情已经发展到较高阶段，重点是把控节奏，避免过度。";
 }
 
@@ -225,7 +312,5 @@ function describeCaution(r: IchingResult): string {
 
 function describeTrend(r: IchingResult): string {
   if (!r.changedHexagram) return "";
-  const fromNature = trigramNature(r.lowerTrigram);
-  const toNature = trigramNature(r.changedHexagram.name.includes("乾") ? "乾" : r.changedHexagram.name.includes("坤") ? "坤" : r.lowerTrigram);
-  return `从${fromNature}向${toNature}转变是自然的发展方向，提前做好准备可以更从容地应对。`;
+  return "变化是自然的发展方向，提前做好准备可以更从容地应对。";
 }

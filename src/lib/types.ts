@@ -63,13 +63,23 @@ export type LuckCycle = {
 
 export type FortuneResult = {
   date: string;
+  lunarDate: string;
+  dayPillar: string;
+  dayElement: string;
+  dayNayin: string;
+  dayLu: string;
   level: string;
   score: number;
   summary: string;
-  yi: string[];
-  ji: string[];
+  keywords: string[];
+  proverb: string;
   luckyHours: string[];
   luckyColor: string;
   luckyDirection: string;
+  zodiacGuide: {
+    clash: string;
+    harmony: string;
+    tripleHarmony: string;
+  };
   details: { label: string; value: number; text: string }[];
 };

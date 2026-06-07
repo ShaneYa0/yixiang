@@ -23,6 +23,8 @@ export function getLunarDate(date: Date) {
     dayInGanZhiExact: lunar.getDayInGanZhiExact(),
     timeInGanZhi: lunar.getTimeInGanZhi(),
     yearShengXiao: lunar.getYearShengXiao(),
+    dayNaYin: (lunar as unknown as { getDayNaYin: () => string }).getDayNaYin(),
+    dayLu: (lunar as unknown as { getDayLu: () => string }).getDayLu(),
     lunarText: lunar.toString(),
     lunarMonthName: `${lunar.getMonthInChinese()}月`,
     lunarDayName: lunar.getDayInChinese(),

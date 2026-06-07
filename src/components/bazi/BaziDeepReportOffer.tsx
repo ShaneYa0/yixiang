@@ -7,7 +7,7 @@ import type { BaziForm } from "@/components/bazi/BaziInput";
 import type { BaziDeepReport } from "@/lib/bazi-deep-report";
 import type { BaziResult } from "@/lib/types";
 
-type AccountUser = { isVip: boolean };
+type AccountUser = { id: string };
 
 export function BaziDeepReportOffer({ result, input }: { result: BaziResult; input: BaziForm }) {
   const router = useRouter();
@@ -23,8 +23,6 @@ export function BaziDeepReportOffer({ result, input }: { result: BaziResult; inp
       .catch(() => setAccount(null))
       .finally(() => setLoaded(true));
   }, []);
-
-  const canAccess = account?.isVip ?? false;
 
   const handleViewReport = async () => {
     setLoading(true);
@@ -47,12 +45,12 @@ export function BaziDeepReportOffer({ result, input }: { result: BaziResult; inp
 
   if (!loaded) return null;
 
-  // Already unlocked → simple button
-  if (canAccess) {
+  // Logged in → show deep report button
+  if (account) {
     return (
       <div className="overflow-hidden rounded-2xl border border-divider bg-card px-6 py-6 text-center sm:px-8">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">八字深度详批</p>
-        <p className="mt-2 text-[13px] leading-relaxed text-ink-light">已解锁，可查看完整命盘详批。</p>
+        <p className="mt-2 text-[13px] leading-relaxed text-ink-light">查看完整命盘详批，涵盖格局、用神、十神和大运流年。</p>
         <button
           onClick={handleViewReport}
           disabled={loading}
@@ -65,7 +63,7 @@ export function BaziDeepReportOffer({ result, input }: { result: BaziResult; inp
     );
   }
 
-  // Not unlocked
+  // Not logged in
   return (
     <div className="overflow-hidden rounded-2xl border border-divider bg-card">
       <div className="px-6 py-6 sm:px-8">
@@ -80,17 +78,15 @@ export function BaziDeepReportOffer({ result, input }: { result: BaziResult; inp
         <div className="mt-5 flex items-center justify-between rounded-xl bg-divider/20 px-5 py-4 dark:bg-divider/10">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ink-fade">完整详批</p>
-            <p className="text-2xl font-light tracking-[0.04em] text-ink dark:text-paper">
-              ¥8.8 <span className="text-[11px] font-normal tracking-normal text-ink-fade">
-                {account ? "起 · 选择方案开通" : "起 · 注册当日免费体验"}
-              </span>
+            <p className="text-[13px] leading-relaxed text-ink-light">
+              登录后即可免费查看
             </p>
           </div>
           <Link
-            href={account ? "/me" : "/register"}
+            href="/login"
             className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-ink bg-ink px-5 py-2.5 text-sm font-medium tracking-[0.14em] text-paper transition-opacity hover:opacity-90 dark:border-paper dark:bg-paper dark:text-ink"
           >
-            解锁深度详批
+            登录查看
           </Link>
         </div>
       </div>

@@ -42,3 +42,11 @@ coverage/
 # prisma
 prisma/*.db
 prisma/*.db-journal
+
+# superpowers docs & agent sessions (AI-generated)
+docs/superpowers/
+.superpowers/
+
+# project tools
+tools/iching-ritual-video/
+backup-removed-files.zip

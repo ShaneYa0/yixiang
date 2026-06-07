@@ -44,11 +44,31 @@ export function HuangliDetails({ data }: { data: HuangliData }) {
         </Card>
         <Card>
           <SectionTitle>吉神</SectionTitle>
-          <p className="text-[13px] leading-7 text-ink-light">{data.almanac.jiShen.join("、")}</p>
+          {data.almanac.jiShen.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {data.almanac.jiShen.map((s) => (
+                <span key={s} className="bg-emerald-50 px-2 py-0.5 text-[11px] tracking-[0.1em] text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  {s}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-ink-light">—</p>
+          )}
         </Card>
         <Card>
           <SectionTitle>凶煞</SectionTitle>
-          <p className="text-[13px] leading-7 text-ink-fade">{data.almanac.xiongSha.join("、")}</p>
+          {data.almanac.xiongSha.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {data.almanac.xiongSha.map((s) => (
+                <span key={s} className="bg-red-50 px-2 py-0.5 text-[11px] tracking-[0.1em] text-red-700 dark:bg-red-950 dark:text-red-300">
+                  {s}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[13px] text-ink-light">—</p>
+          )}
         </Card>
         <Card>
           <SectionTitle>冲煞</SectionTitle>

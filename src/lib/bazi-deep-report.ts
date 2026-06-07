@@ -1,6 +1,6 @@
 import type { BaziResult, LuckCycle } from "@/lib/types";
 
-export type DeepReportSource = "free-credit" | "paid" | "subscription";
+export type DeepReportSource = "free-credit" | "paid" | "subscription" | "free";
 
 // ========== Section-specific structured data ==========
 
@@ -557,11 +557,12 @@ function buildDashboard(result: BaziResult) {
 
 export function buildBaziDeepReport(
   result: BaziResult,
-  options: {
-    ownerEmail: string;
-    source: DeepReportSource;
+  options?: {
+    ownerEmail?: string;
+    source?: DeepReportSource;
   },
 ): BaziDeepReport {
+  const opts = { ownerEmail: "", source: "free" as DeepReportSource, ...options };
   const patternInfo = determinePattern(result);
   const tenGodCombos = identifyTenGodCombos(result);
   const tenGodFreq = buildTenGodFrequency(result);
@@ -577,9 +578,9 @@ export function buildBaziDeepReport(
   return {
     id: makeId(result),
     type: "bazi",
-    ownerEmail: options.ownerEmail,
-    source: options.source,
-    priceLabel: options.source === "free-credit" ? "首份免费" : "单次详批",
+    ownerEmail: opts.ownerEmail,
+    source: opts.source,
+    priceLabel: "完整详批",
     generatedAt: new Date().toISOString(),
     headline: `${result.dayMaster}日主 · ${patternInfo.pattern} · ${result.strength}`,
     summary: `此详批依据四柱、十神、纳音、五行分布与大运流年综合推看。日主${result.dayMaster}，格局取${patternInfo.pattern}，五行缺口为${missing}，参考调候为${result.usefulElements.join("、")}。`,

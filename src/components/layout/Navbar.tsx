@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { resolveAuthUser } from "@/lib/auth-utils";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { LargeTextToggle } from "@/components/layout/LargeTextToggle";
 import { NavLink } from "@/components/layout/NavLink";
 
 const links = [
   { href: "/fortune", label: "运势" },
   { href: "/bazi", label: "八字" },
   { href: "/marriage", label: "姻缘" },
-  { href: "/iching", label: "易经" },
+  { href: "/iching", label: "六爻" },
   { href: "/huangli", label: "黄历" },
 ];
 
@@ -29,6 +30,7 @@ export async function Navbar() {
         >
           {user ? "我的" : "登录 / 我的"}
         </Link>
+        <LargeTextToggle />
         <ThemeToggle />
       </div>
     </nav>

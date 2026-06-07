@@ -1,219 +1,129 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { HexagramLines, YAO_POSITION_NAMES } from "@/components/iching/HexagramLines";
 import { Button } from "@/components/ui/Button";
-import {
-  type RitualPhase,
-  renderFrame,
-} from "./ritual-canvas";
+import type { LineValue } from "@/lib/iching";
 
-const phaseLabels: Record<RitualPhase, string> = {
-  idle: "静心问卦",
-  breath: "一念初定",
-  cloud: "阴阳成旋",
-  coins: "三钱定爻",
-  seal: "六爻成象",
-  done: "卦象已成",
+const COIN_LABEL: Record<LineValue, string> = { 0: "三反 · 老阴", 1: "一正两反 · 少阴", 2: "两正一反 · 少阳", 3: "三正 · 老阳" };
+
+type State = {
+  lines: (LineValue | undefined)[];
+  step: number;
+  phase: "idle" | "tossing" | "result";
+  coinFaces: boolean[];
+  tossResult: LineValue | null;
 };
 
-const PHASE_DURATIONS: Partial<Record<RitualPhase, number>> = {
-  breath: 760,
-  cloud: 940,
-  coins: 1060,
-  seal: 1040,
-};
+const INIT: State = { lines: Array.from({ length: 6 }, () => undefined), step: 0, phase: "idle", coinFaces: [], tossResult: null };
+type Action = { type: "START_TOSS" } | { type: "DONE_TOSS"; value: LineValue; faces: boolean[] } | { type: "CLEAR_RESULT" } | { type: "RESET" };
 
-const TOTAL_DURATION = 4300;
+function reducer(state: State, action: Action): State {
+  if (action.type === "START_TOSS") return { ...state, phase: "tossing", coinFaces: [], tossResult: null };
+  if (action.type === "CLEAR_RESULT") return { ...state, phase: "idle", coinFaces: [], tossResult: null };
+  if (action.type === "RESET") return INIT;
+  if (action.type === "DONE_TOSS") {
+    const lines = [...state.lines];
+    lines[state.step] = action.value;
+    return { ...state, lines, step: state.step + 1, phase: "result", coinFaces: action.faces, tossResult: action.value };
+  }
+  return state;
+}
 
-export function IchingCast({ onCast, isCasting }: { onCast: (question: string, yao: boolean[]) => void; isCasting: boolean }) {
+export function IchingCast({ onCast, isCasting }: { onCast: (question: string, lines: LineValue[]) => void; isCasting: boolean }) {
+  const [state, dispatch] = useReducer(reducer, INIT);
   const [question, setQuestion] = useState("");
-  const [phase, setPhase] = useState<RitualPhase>("idle");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animFrameRef = useRef<number>(0);
-  const startTimeRef = useRef<number>(0);
   const questionRef = useRef("");
-  const yaoRef = useRef<boolean[]>([]);
-  const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
+  const timerRef = useRef<number | null>(null);
+  const submitRef = useRef(onCast);
 
   useEffect(() => {
     questionRef.current = question;
-  }, [question]);
+    submitRef.current = onCast;
+  }, [onCast, question]);
 
-  const ritualActive = phase !== "idle";
-
-  // 绘制一帧
-  const drawFrame = useCallback((phase: RitualPhase, elapsedInPhase: number, totalElapsed: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const { w, h, dpr } = sizeRef.current;
-    const dark = document.documentElement.classList.contains("dark");
-
-    ctx.save();
-    ctx.scale(dpr, dpr);
-    renderFrame(ctx, {
-      phase,
-      elapsedInPhase,
-      totalElapsed,
-      width: w,
-      height: h,
-      yaoPattern: yaoRef.current,
-      dark,
-    });
-    ctx.restore();
+  useEffect(() => () => {
+    if (timerRef.current) window.clearTimeout(timerRef.current);
   }, []);
 
-  // 动画循环
-  useEffect(() => {
-    if (!ritualActive) {
-      drawFrame("idle", 0, 0);
-      return;
-    }
+  const toss = () => {
+    if (state.phase !== "idle" || state.step >= 6) return;
+    dispatch({ type: "START_TOSS" });
+    timerRef.current = window.setTimeout(() => {
+      const faces = Array.from({ length: 3 }, () => Math.random() < 0.5);
+      const value = faces.filter(Boolean).length as LineValue;
+      const finalLines = [...state.lines];
+      finalLines[state.step] = value;
+      dispatch({ type: "DONE_TOSS", value, faces });
+      timerRef.current = window.setTimeout(() => {
+        if (state.step === 5) submitRef.current(questionRef.current, finalLines as LineValue[]);
+        else dispatch({ type: "CLEAR_RESULT" });
+      }, 650);
+    }, 850);
+  };
 
-    startTimeRef.current = performance.now();
-
-    const tick = (now: number) => {
-      const totalElapsed = now - startTimeRef.current;
-
-      // 确定当前阶段
-      let currentPhase: RitualPhase = "done";
-      let phaseStart = TOTAL_DURATION;
-      let accumulated = 0;
-
-      const phaseOrder: RitualPhase[] = ["breath", "cloud", "coins", "seal"];
-      for (const p of phaseOrder) {
-        const dur = PHASE_DURATIONS[p] ?? 0;
-        if (totalElapsed >= accumulated && totalElapsed < accumulated + dur) {
-          currentPhase = p;
-          phaseStart = accumulated;
-          break;
-        }
-        accumulated += dur;
-      }
-
-      if (totalElapsed >= 3800) {
-        currentPhase = "done";
-        phaseStart = 3800;
-      }
-
-      const elapsedInPhase = totalElapsed - phaseStart;
-
-      // 更新阶段状态
-      setPhase((prev) => (prev !== currentPhase ? currentPhase : prev));
-
-      drawFrame(currentPhase, elapsedInPhase, totalElapsed);
-
-      if (totalElapsed < TOTAL_DURATION) {
-        animFrameRef.current = requestAnimationFrame(tick);
-      } else {
-        setPhase("done");
-        onCast(questionRef.current, yaoRef.current);
-      }
-    };
-
-    animFrameRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, [ritualActive]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Canvas 尺寸管理
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const updateSize = () => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      sizeRef.current = { w: rect.width, h: rect.height, dpr };
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-
-      // 重绘 idle 帧
-      if (!ritualActive) {
-        drawFrame("idle", 0, 0);
-      }
-    };
-
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
-  }, [ritualActive, drawFrame]);
-
-  const startRitual = useCallback(() => {
-    if (ritualActive || isCasting) return;
-    // 随机生成六爻：true=阴爻(断开), false=阳爻(连线)
-    yaoRef.current = Array.from({ length: 6 }, () => Math.random() < 0.5);
-    setPhase("breath");
-  }, [ritualActive, isCasting]);
+  const { lines, step, phase, coinFaces, tossResult } = state;
+  const currentIndex = Math.min(step, 5);
+  const currentName = YAO_POSITION_NAMES[currentIndex];
 
   return (
-    <div className="mx-auto max-w-2xl py-8 text-center">
-      <p className="mb-1 text-[10px] font-semibold tracking-[0.3em] text-ink-fade">
-        一念起 · 六爻成
-      </p>
-      <h1 className="mb-2 text-xl font-medium tracking-[0.22em] text-ink">
-        易经占卜
-      </h1>
+    <div className="mx-auto max-w-2xl py-8">
+      <header className="mb-7 text-center">
+        <p className="mb-2 text-[10px] font-semibold tracking-[0.32em] text-[#aa8b55]">一念起 · 六爻成</p>
+        <h1 className="text-2xl font-medium tracking-[0.22em] text-ink">六爻占卜</h1>
+        <p className="mt-3 text-xs tracking-[0.1em] text-ink-soft">三钱一掷，自初爻向上依次成卦</p>
+      </header>
 
-      {/* 仪式画面区 — 桌面透视 */}
-      <div
-        className={`yx-rice-paper relative mx-auto mb-6 overflow-hidden rounded-sm border transition-all duration-1000 ${
-          ritualActive
-            ? "border-[#c4a050]/40 shadow-[0_4px_20px_rgba(44,36,22,0.12),0_0_80px_rgba(180,140,60,0.1)]"
-            : "border-[#d5c9b0] shadow-[0_2px_12px_rgba(44,36,22,0.08),0_8px_32px_rgba(44,36,22,0.04)] hover:border-[#c4a050]/50 hover:shadow-[0_4px_20px_rgba(44,36,22,0.12),0_12px_40px_rgba(44,36,22,0.06)]"
-        }`}
-        style={{ aspectRatio: "1 / 1" }}
-      >
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 h-full w-full"
-          style={{ display: "block" }}
-        />
-
-        {/* 阶段标签 */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#f6f1e6] via-[#f6f1e6]/80 to-transparent pb-4 pt-14 text-center">
-          <div
-            key={phase}
-            className="text-[11px] tracking-[0.25em] text-[#8B7355]"
-            style={{ animation: "yx-fade-up 0.5s ease both" }}
-          >
-            {phaseLabels[phase]}
+      <section className="overflow-hidden rounded-sm border border-[#d9cdb8] bg-white shadow-[0_20px_70px_rgba(73,55,25,0.08)] dark:bg-card">
+        <div className="grid md:grid-cols-[1.15fr_0.85fr]">
+          <div className="relative border-b border-divider px-5 py-6 md:border-b-0 md:border-r md:px-7 md:py-8">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#80643c] via-[#cfad68] to-[#80643c]" />
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] tracking-[0.2em] text-ink-fade">本卦 · 实时成象</p>
+                <p className="mt-1 text-sm text-ink">{step === 0 ? "尚未起爻" : `已成 ${step} 爻`}</p>
+              </div>
+              <div className="flex gap-1.5">
+                {Array.from({ length: 6 }, (_, index) => <span key={index} className={`h-1.5 w-5 rounded-full transition duration-500 ${index < step ? "bg-[#b68a3a]" : "bg-divider"}`} />)}
+              </div>
+            </div>
+            <HexagramLines lines={lines} activeIndex={step < 6 ? step : undefined} />
           </div>
-          <div className="mt-1.5 text-[11px] tracking-[0.12em] text-ink-fade">
-            {ritualActive || isCasting
-              ? "请保持专注，六爻正在成象"
-              : "默想问题，点击画面或下方按钮开始"}
+
+          <div className="flex min-h-[300px] flex-col justify-between bg-[#faf7f1] px-6 py-7 dark:bg-[#28231e]">
+            <div>
+              <p className="text-[10px] tracking-[0.22em] text-[#aa8b55]">{step < 6 ? `第 ${step + 1} 次 · ${currentName}` : "六爻已成"}</p>
+              <h2 className="mt-3 text-lg font-medium tracking-[0.12em] text-ink">
+                {phase === "tossing" ? "铜钱旋转，静候落定" : phase === "result" && tossResult !== null ? COIN_LABEL[tossResult] : step === 0 ? "从初爻开始" : `继续摇${currentName}`}
+              </h2>
+              {phase === "tossing" && <p className="mt-3 text-xs leading-6 text-ink-light">保持心念不移，静候铜钱落定。</p>}
+            </div>
+            <div className="my-7 flex min-h-20 items-center justify-center gap-4">
+              {[0, 1, 2].map((index) => <CopperCoin key={index} face={phase === "result" ? coinFaces[index] : null} spinning={phase === "tossing"} />)}
+            </div>
+            <p className="border-t border-divider pt-4 text-center text-[10px] tracking-[0.18em] text-ink-fade">{step >= 6 ? "卦象已提交，正在解卦" : "顺序固定：初爻 → 二爻 → 三爻 → 四爻 → 五爻 → 上爻"}</p>
           </div>
         </div>
+      </section>
 
-        {/* 点击区域 */}
-        {!ritualActive && !isCasting && (
-          <button
-            type="button"
-            onClick={startRitual}
-            className="absolute inset-0 cursor-pointer"
-            aria-label="点击开始起卦"
-          />
-        )}
+      {step === 0 && <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="默想你的问题，可不填" rows={2} className="mt-5 w-full resize-none rounded-sm border border-divider bg-white p-4 text-sm text-ink outline-none transition placeholder:text-ink-fade focus:border-[#a37a38] dark:bg-card dark:text-paper" />}
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+        <Button onClick={toss} disabled={phase !== "idle" || step >= 6 || isCasting} className="w-full">
+          {isCasting ? "解卦中" : phase === "tossing" ? `正在摇${currentName}` : step === 0 ? "开始摇初爻" : step < 6 ? `摇${currentName} · 第 ${step + 1}/6 次` : "六爻已成"}
+        </Button>
+        {step > 0 && <Button variant="outline" onClick={() => dispatch({ type: "RESET" })} disabled={phase === "tossing" || isCasting}>重新起卦</Button>}
       </div>
+    </div>
+  );
+}
 
-      {/* 问题输入 */}
-      <textarea
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
-        placeholder="默想你的问题，可不填"
-        rows={3}
-        className="mb-6 w-full resize-none rounded-sm border border-divider bg-white p-4 text-sm text-ink outline-none transition placeholder:text-ink-fade focus:border-ink dark:bg-card dark:text-paper"
-      />
-
-      {/* 起卦按钮 */}
-      <Button
-        onClick={startRitual}
-        disabled={ritualActive || isCasting}
-        className="w-full"
-      >
-        {ritualActive || isCasting ? "起卦中" : "开始起卦"}
-      </Button>
+function CopperCoin({ face, spinning }: { face: boolean | null; spinning: boolean }) {
+  return (
+    <div className={`relative flex h-16 w-16 items-center justify-center rounded-full border-[3px] border-[#b18742] bg-[radial-gradient(circle_at_35%_30%,#f3dfad,#b78a43_58%,#6e4a20)] shadow-[0_6px_16px_rgba(73,48,16,0.22)] ${spinning ? "animate-[spin_700ms_linear_infinite]" : ""}`}>
+      <span className="absolute inset-1 rounded-full border border-[#745323]/60" />
+      <span className="h-5 w-5 rounded-[3px] bg-[#342717] shadow-[inset_0_1px_3px_rgba(0,0,0,0.7)]" />
+      {face !== null && <span className="absolute -bottom-5 text-[9px] tracking-[0.12em] text-ink-fade">{face ? "正" : "反"}</span>}
     </div>
   );
 }

@@ -20,15 +20,8 @@ export async function POST(req: NextRequest) {
   const user = await resolveAuthUser();
   if (!user) return authError("请先登录后查看深度详批");
 
-  if (!user.isVip) {
-    return authError("深度详批为订阅专属内容，请先订阅", 402);
-  }
-
   const result = calculateBazi(input);
-  const report = buildBaziDeepReport(result, {
-    ownerEmail: user.email,
-    source: "subscription",
-  });
+  const report = buildBaziDeepReport(result);
 
   // Persist report to DB when Supabase is configured
   if (isSupabaseConfigured()) {
@@ -39,8 +32,6 @@ export async function POST(req: NextRequest) {
         birthDate: new Date(`${input.birthDate}T${String(input.birthHour).padStart(2, "0")}:00:00`),
         birthHour: input.birthHour,
         gender: input.gender,
-        source: report.source,
-        priceCents: 0,
         report: report as unknown as object,
       },
     });

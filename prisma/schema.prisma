@@ -8,19 +8,12 @@ datasource db {
 }
 
 model User {
-  id                  String         @id @default(uuid())
-  email               String         @unique
-  isVip               Boolean        @default(false)
-  vipSince            DateTime?
-  reportCredits       Int            @default(1)
-  trialEndsAt         DateTime?
-  subscriptionTier    String?
-  subscriptionEndsAt  DateTime?
-  createdAt           DateTime       @default(now())
-  baziRecords         BaziRecord[]
-  ichingRecords       IchingRecord[]
-  baziReports         BaziDeepReport[]
-  payments            Payment[]
+  id            String          @id @default(uuid())
+  email         String          @unique
+  createdAt     DateTime        @default(now())
+  baziRecords   BaziRecord[]
+  ichingRecords IchingRecord[]
+  baziReports   BaziDeepReport[]
 }
 
 model BaziRecord {
@@ -46,28 +39,12 @@ model IchingRecord {
 }
 
 model BaziDeepReport {
-  id          String   @id
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  birthDate   DateTime
-  birthHour   Int
-  gender      String
-  source      String
-  priceCents  Int
-  report      Json
-  createdAt   DateTime @default(now())
-}
-
-model Payment {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  reportType  String
-  amountCents Int
-  currency    String   @default("CNY")
-  status      String   @default("pending")
-  provider    String?
-  providerRef String?
-  createdAt   DateTime @default(now())
-  paidAt      DateTime?
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  birthDate DateTime
+  birthHour Int
+  gender    String
+  report    Json
+  createdAt DateTime @default(now())
 }

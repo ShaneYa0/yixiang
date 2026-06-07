@@ -12,7 +12,7 @@ const elBg: Record<string, string> = {
   "木": "rgba(107,140,92,0.07)", "火": "rgba(196,102,74,0.06)", "土": "rgba(196,162,74,0.07)", "金": "rgba(184,160,112,0.07)", "水": "rgba(92,122,154,0.06)",
 };
 const elIcon: Record<string, string> = {
-  "木": "/images/elements/wood.png", "火": "/images/elements/fire.png", "土": "/images/elements/earth.png", "金": "/images/elements/metal.png", "水": "/images/elements/water.png",
+  "木": "/images/elements/wood.webp", "火": "/images/elements/fire.webp", "土": "/images/elements/earth.webp", "金": "/images/elements/metal.webp", "水": "/images/elements/water.webp",
 };
 const chapterTheme = {
   structure: { accent: "#C4A24A", soft: "rgba(196,162,74,0.07)" },

@@ -4,35 +4,25 @@ import { SectionTitle } from "@/components/ui/SectionTitle";
 
 export function FortuneTiming({ fortune }: { fortune: FortuneResult }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Card>
-        <SectionTitle>宜</SectionTitle>
-        <div className="flex flex-wrap gap-2">
-          {fortune.yi.map((item) => (
-            <span key={item} className="bg-divider/40 px-2 py-1 text-[11px] tracking-[0.1em] text-ink">
-              {item}
-            </span>
-          ))}
+    <Card>
+      <SectionTitle>吉时方位</SectionTitle>
+      <div className="grid gap-4 text-[13px] sm:grid-cols-3">
+        <div className="text-center">
+          <div className="mb-1 text-[10px] tracking-[0.2em] text-ink/40">贵人时</div>
+          <div className="text-ink font-medium">{fortune.luckyHours.join(" · ")}</div>
         </div>
-      </Card>
-      <Card>
-        <SectionTitle>忌</SectionTitle>
-        <div className="flex flex-wrap gap-2">
-          {fortune.ji.map((item) => (
-            <span key={item} className="bg-divider/20 px-2 py-1 text-[11px] tracking-[0.1em] text-ink-light">
-              {item}
-            </span>
-          ))}
+        <div className="text-center">
+          <div className="mb-1 text-[10px] tracking-[0.2em] text-ink/40">幸运色</div>
+          <div className="text-ink font-medium">{fortune.luckyColor}</div>
         </div>
-      </Card>
-      <Card className="sm:col-span-2">
-        <SectionTitle>吉时方位</SectionTitle>
-        <div className="grid gap-3 text-[13px] text-ink-light sm:grid-cols-3">
-          <span>吉时：{fortune.luckyHours.join("、") || "午时"}</span>
-          <span>幸运色：{fortune.luckyColor}</span>
-          <span>吉方：{fortune.luckyDirection}</span>
+        <div className="text-center">
+          <div className="mb-1 text-[10px] tracking-[0.2em] text-ink/40">吉方</div>
+          <div className="text-ink font-medium">{fortune.luckyDirection}</div>
         </div>
-      </Card>
-    </div>
+      </div>
+      <div className="mt-5 border-t border-ink/5 pt-4 text-center">
+        <p className="text-[12px] leading-relaxed text-ink-fade italic">{fortune.proverb}</p>
+      </div>
+    </Card>
   );
 }

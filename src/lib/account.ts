@@ -11,8 +11,6 @@ export async function ensureAppUser(user: SupabaseUser) {
     create: {
       id: user.id,
       email,
-      reportCredits: 1,
-      trialEndsAt: new Date(Date.now() + 86400000), // 1 day free trial
     },
   });
 }

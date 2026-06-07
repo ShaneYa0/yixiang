@@ -12,7 +12,6 @@ export async function POST(req: NextRequest) {
 
   const user = await resolveAuthUser();
   if (!user) return authError("请先登录后查看深度解读");
-  if (!user.isVip) return authError("深度解读为会员专属内容，请先开通会员", 402);
 
   let report;
 
@@ -35,8 +34,6 @@ export async function POST(req: NextRequest) {
           birthDate: new Date(),
           birthHour: 0,
           gender: "male",
-          source: "subscription",
-          priceCents: 0,
           report: report as unknown as object,
         },
       });

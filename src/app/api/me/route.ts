@@ -12,12 +12,7 @@ export async function GET() {
     user: {
       id: user.id,
       email: user.email,
-      isVip: user.isVip,
       isLocal: user.isLocal,
-      trialEndsAt: user.trialEndsAt,
-      subscriptionTier: user.subscriptionTier,
-      subscriptionEndsAt: user.subscriptionEndsAt,
-      reportCredits: user.reportCredits,
     },
   });
 }

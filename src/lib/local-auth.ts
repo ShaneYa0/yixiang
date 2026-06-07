@@ -5,11 +5,7 @@ const cookieName = "yixiang_local_user";
 export type LocalUser = {
   id: string;
   email: string;
-  reportCredits: number;
   isLocal: true;
-  trialEndsAt?: string;
-  subscriptionTier?: string;
-  subscriptionEndsAt?: string;
 };
 
 export function makeLocalUser(email: string): LocalUser {
@@ -18,9 +14,7 @@ export function makeLocalUser(email: string): LocalUser {
   return {
     id: `local-${normalizedEmail}`,
     email: normalizedEmail,
-    reportCredits: 1,
     isLocal: true,
-    trialEndsAt: new Date(Date.now() + 86400000).toISOString(), // 1 day free trial
   };
 }
 

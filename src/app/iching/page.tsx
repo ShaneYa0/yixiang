@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { IchingCast } from "@/components/iching/IchingCast";
 import { IchingResultDisplay } from "@/components/iching/IchingResult";
-import type { IchingResult } from "@/lib/iching";
-import { getHexagramIndex } from "@/lib/iching";
+import type { IchingResult, LineValue } from "@/lib/iching";
 
 export type IchingApiResponse = IchingResult & { reading: string };
 
@@ -12,14 +11,12 @@ export default function IchingPage() {
   const [result, setResult] = useState<IchingApiResponse | null>(null);
   const [casting, setCasting] = useState(false);
 
-  const cast = async (question: string, yao: boolean[]) => {
+  const cast = async (question: string, lines: LineValue[]) => {
     setCasting(true);
-    // 客户端直接算卦序，传数字给 API，彻底避开布尔 JSON 序列化问题
-    const index = getHexagramIndex(yao);
     const response = await fetch("/api/iching", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, index }),
+      body: JSON.stringify({ question, lines }),
     });
     setResult(await response.json());
     setCasting(false);

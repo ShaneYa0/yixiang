@@ -7,11 +7,15 @@ type Theme = "light" | "dark";
 type ThemeContextValue = {
   theme: Theme;
   toggleTheme: () => void;
+  largeText: boolean;
+  toggleLargeText: () => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: "light",
   toggleTheme: () => {},
+  largeText: false,
+  toggleLargeText: () => {},
 });
 
 export function useTheme() {
@@ -20,6 +24,7 @@ export function useTheme() {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
+  const [largeText, setLargeText] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -30,6 +35,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       setTheme("dark");
     }
+    setLargeText(localStorage.getItem("yixiang-large-text") === "true");
   }, []);
 
   useEffect(() => {
@@ -43,12 +49,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("yixiang-theme", theme);
   }, [theme, mounted]);
 
+  useEffect(() => {
+    if (!mounted) return;
+    document.documentElement.classList.toggle("large-text", largeText);
+    localStorage.setItem("yixiang-large-text", String(largeText));
+  }, [largeText, mounted]);
+
   const toggleTheme = useCallback(() => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   }, []);
 
+  const toggleLargeText = useCallback(() => {
+    setLargeText((prev) => !prev);
+  }, []);
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, largeText, toggleLargeText }}>
       {children}
     </ThemeContext.Provider>
   );

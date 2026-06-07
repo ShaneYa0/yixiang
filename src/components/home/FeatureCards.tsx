@@ -6,7 +6,7 @@ const features = [
   { href: "/fortune", icon: "☀", title: "今日运势", text: "吉凶、宜忌、吉时与行动提示。" },
   { href: "/bazi", icon: "☯", title: "生辰八字", text: "四柱排盘与五行分布。" },
   { href: "/marriage", icon: "⚭", title: "姻缘配对", text: "合婚指数与关系简评。" },
-  { href: "/iching", icon: "☰", title: "易经占卜", text: "起卦、动爻与方向解读。" },
+  { href: "/iching", icon: "☰", title: "六爻占卜", text: "起卦、动爻与方向解读。" },
   { href: "/huangli", icon: "☷", title: "每日黄历", text: "农历、宜忌、吉神方位。" },
 ];
 
