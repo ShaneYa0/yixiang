@@ -159,7 +159,11 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string) =
             ? "border-[#c4a050]/40 shadow-[0_4px_20px_rgba(44,36,22,0.12),0_0_80px_rgba(180,140,60,0.1)]"
             : "border-[#d5c9b0] shadow-[0_2px_12px_rgba(44,36,22,0.08),0_8px_32px_rgba(44,36,22,0.04)] hover:border-[#c4a050]/50 hover:shadow-[0_4px_20px_rgba(44,36,22,0.12),0_12px_40px_rgba(44,36,22,0.06)]"
         }`}
-        style={{ aspectRatio: "1 / 1" }}
+        style={{
+          aspectRatio: "1 / 1",
+          transform: "perspective(700px) rotateX(7deg)",
+          transformOrigin: "50% 100%",
+        }}
       >
         <canvas
           ref={canvasRef}
