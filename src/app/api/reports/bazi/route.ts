@@ -25,16 +25,20 @@ export async function POST(req: NextRequest) {
 
   // Persist report to DB when Supabase is configured
   if (isSupabaseConfigured()) {
-    await prisma.baziDeepReport.create({
-      data: {
-        id: report.id,
-        userId: user.id,
-        birthDate: new Date(`${input.birthDate}T${String(input.birthHour).padStart(2, "0")}:00:00`),
-        birthHour: input.birthHour,
-        gender: input.gender,
-        report: report as unknown as object,
-      },
-    });
+    try {
+      await prisma.baziDeepReport.create({
+        data: {
+          id: report.id,
+          userId: user.id,
+          birthDate: new Date(`${input.birthDate}T${String(input.birthHour).padStart(2, "0")}:00:00`),
+          birthHour: input.birthHour,
+          gender: input.gender,
+          report: report as unknown as object,
+        },
+      });
+    } catch {
+      // DB save is optional — report still returns to user
+    }
   }
 
   return NextResponse.json({ report });
