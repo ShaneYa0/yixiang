@@ -6,6 +6,8 @@ export type RitualPhase = "idle" | "breath" | "cloud" | "coins" | "seal" | "done
 
 const INK_COLOR = "#1a1510";
 const PAPER_BG = "#f6f1e6";
+const PAPER_BG_DARK = "#24211D";
+const INK_COLOR_DARK = "#F2E8D8";
 const COIN_FACE = "#C4A265";
 const COIN_EDGE = "#8B6914";
 const COIN_RIM = "#7A5C12";
@@ -47,47 +49,82 @@ function deskTransform(ctx: CanvasRenderingContext2D, ox: number = 0, oy: number
 
 // ---- 宣纸桌面 ----
 
-export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number, showTaiji: boolean = true) {
-  ctx.fillStyle = PAPER_BG;
+export function drawPaperBg(ctx: CanvasRenderingContext2D, w: number, h: number, showTaiji: boolean = true, dark: boolean = false) {
+  ctx.fillStyle = dark ? PAPER_BG_DARK : PAPER_BG;
   ctx.fillRect(0, 0, w, h);
 
-  // 太极水印（idle 时显示，仪式开始后消失）
   if (showTaiji) {
-    drawTaijiObl(ctx, w, h);
+    drawTaijiObl(ctx, w, h, dark);
   }
 }
 
-function drawTaijiObl(ctx: CanvasRenderingContext2D, w: number, h: number) {
+function drawTaijiObl(ctx: CanvasRenderingContext2D, w: number, h: number, dark: boolean) {
   const p = obl(w / 2, h * 0.12, 0, h);
   const r = Math.min(w, h) * 0.16;
+  const light = dark ? PAPER_BG_DARK : PAPER_BG;
+  const darkC = dark ? INK_COLOR_DARK : INK_COLOR;
 
-  ctx.save();
-  ctx.globalAlpha = 1.0;
-  ctx.strokeStyle = INK_COLOR;
-  ctx.lineWidth = 0.8;
-
-  // 斜二测变换后画圆 = 桌面上的正确椭圆
   ctx.save();
   deskTransform(ctx, p.x, p.y);
+
+  // 外圆底色 — 阳面（右半，亮色）
+  ctx.fillStyle = light;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 阴面（左半，暗色）— 用 clip 绘制
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.clip();
+
+  // 左下暗色半圆
+  ctx.fillStyle = darkC;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  // 用右侧白色半圆覆盖，留下左侧暗色
+  ctx.fill();
+
+  // 上半 S 曲线：亮色向外扩展
+  ctx.fillStyle = light;
+  ctx.beginPath();
+  ctx.arc(0, -r / 2, r / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 下半 S 曲线：暗色向外扩展
+  ctx.fillStyle = darkC;
+  ctx.beginPath();
+  ctx.arc(0, r / 2, r / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // 外圆描边
+  ctx.strokeStyle = darkC;
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.stroke();
-  // S 曲线
+
+  // S 曲线描边
+  ctx.lineWidth = 0.8;
   ctx.beginPath();
   ctx.arc(0, -r / 2, r / 2, Math.PI * 0.5, Math.PI * 1.5);
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(0, r / 2, r / 2, -Math.PI * 0.5, Math.PI * 0.5);
   ctx.stroke();
-  // 两个小圆点（阴阳鱼眼）
-  ctx.fillStyle = INK_COLOR;
+
+  // 阴阳鱼眼
+  ctx.fillStyle = darkC;
   ctx.beginPath();
   ctx.arc(0, -r / 2, r * 0.12, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = light;
   ctx.beginPath();
   ctx.arc(0, r / 2, r * 0.12, 0, Math.PI * 2);
   ctx.fill();
-  ctx.restore();
 
   ctx.restore();
 }
@@ -448,13 +485,14 @@ export interface RenderState {
   width: number;
   height: number;
   yaoPattern: boolean[];
+  dark: boolean;
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
-  const { phase, elapsedInPhase, width: w, height: h, yaoPattern } = state;
+  const { phase, elapsedInPhase, width: w, height: h, yaoPattern, dark } = state;
 
   ctx.clearRect(0, 0, w, h);
-  drawPaperBg(ctx, w, h, phase === "idle");
+  drawPaperBg(ctx, w, h, phase === "idle", dark);
 
   const activeLines = ACTIVE_LINES[phase];
   drawYaoPlaceholders(ctx, w, h, activeLines);

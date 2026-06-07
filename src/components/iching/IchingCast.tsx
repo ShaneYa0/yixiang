@@ -48,6 +48,7 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string, y
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const { w, h, dpr } = sizeRef.current;
+    const dark = document.documentElement.classList.contains("dark");
 
     ctx.save();
     ctx.scale(dpr, dpr);
@@ -58,6 +59,7 @@ export function IchingCast({ onCast, isCasting }: { onCast: (question: string, y
       width: w,
       height: h,
       yaoPattern: yaoRef.current,
+      dark,
     });
     ctx.restore();
   }, []);
