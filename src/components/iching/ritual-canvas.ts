@@ -213,20 +213,18 @@ export function drawInkDiffusion(
 
 function drawCoinShadow(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number,
+  wx: number, wy: number,
   heightAbove: number,
 ) {
   if (heightAbove <= 4) return;
   const maxH = 160;
   const t = Math.min(heightAbove / maxH, 1);
-  const p = obl(x, y, 0);
+  const p = obl(wx, wy, 0);
 
   const alpha = 0.25 * t;
   const blur = 3 + t * 24;
-  const sx = 20 + t * 16;
-  const sy = 20 + t * 16;
+  const r = 20 + t * 16;
 
-  // 软阴影多层椭圆（在斜二测桌面上）
   for (let i = 3; i >= 0; i--) {
     const a = alpha / 4 * (1 + i * 0.5);
     const b = blur * ((i + 1) / 4);
@@ -234,49 +232,20 @@ function drawCoinShadow(
     ctx.beginPath();
     ctx.save();
     deskTransform(ctx, p.x, p.y);
-    ctx.ellipse(0, 0, sx + b, sy + b, 0, 0, Math.PI * 2);
-    ctx.restore();
+    ctx.arc(0, 0, r + b, 0, Math.PI * 2); // deskTransform 自动变椭圆
     ctx.fill();
+    ctx.restore();
   }
 }
 
 // ---- 3D 铜钱 ----
 
-function drawCoin3D(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number,
-  rotation: number,
-  flatness: number,
-) {
-  const size = 22;
+/** 画铜钱的币面细节（圆心在原点） */
+function drawCoinFace(ctx: CanvasRenderingContext2D, size: number, visibility: number) {
   const innerR = 10;
   const hole = 4;
+  const faceA = 0.2 + visibility * 0.8;
 
-  ctx.save();
-  ctx.translate(x, y);
-
-  const sqY = 0.06 + flatness * 0.94;
-  ctx.scale(1, sqY);
-  ctx.rotate(rotation);
-
-  // 边缘厚度
-  if (flatness < 0.80) {
-    const ev = 1 - flatness / 0.80;
-    ctx.strokeStyle = COIN_EDGE;
-    ctx.lineWidth = 5 * ev;
-    ctx.beginPath();
-    ctx.arc(0, 0, size, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = `rgba(210, 180, 130, ${ev * 0.55})`;
-    ctx.lineWidth = 1.8 * ev;
-    ctx.beginPath();
-    ctx.arc(0, 0, size - 2, -0.2, Math.PI * 0.75);
-    ctx.stroke();
-  }
-
-  // 币面
-  const faceA = 0.2 + flatness * 0.8;
   ctx.fillStyle = COIN_FACE;
   ctx.globalAlpha = faceA;
   ctx.beginPath();
@@ -289,9 +258,8 @@ function drawCoin3D(
   ctx.arc(0, 0, size, 0, Math.PI * 2);
   ctx.stroke();
 
-  // 内圈 & 方孔
-  if (flatness > 0.35) {
-    const iv = (flatness - 0.35) / 0.65;
+  if (visibility > 0.35) {
+    const iv = (visibility - 0.35) / 0.65;
     ctx.globalAlpha = faceA * iv;
 
     ctx.strokeStyle = `rgba(100, 75, 35, ${0.7 * iv})`;
@@ -322,7 +290,72 @@ function drawCoin3D(
   }
 
   ctx.globalAlpha = 1;
-  ctx.restore();
+}
+
+function drawCoin3D(
+  ctx: CanvasRenderingContext2D,
+  wx: number, wy: number, wz: number,
+  rotation: number,
+  flatness: number,
+) {
+  const size = 22;
+  const p = obl(wx, wy, wz);       // 铜钱当前位置
+  const p0 = obl(wx, wy, 0);       // 桌面投影点
+
+  // flatness 0→1：空中侧立 → 平贴桌面
+  // 空中：在屏幕空间画圆（有钱币自身的 3D 旋转）
+  // 桌面：在 deskTransform 空间画圆（自动变成斜二测椭圆）
+
+  if (flatness > 0.65) {
+    // 接近桌面 → 斜二测椭圆
+    const t = (flatness - 0.65) / 0.35;
+    const sx = p.x + (p0.x - p.x) * t;
+    const sy = p.y + (p0.y - p.y) * t;
+    const vis = flatness;
+
+    ctx.save();
+    deskTransform(ctx, sx, sy);
+    // 残留旋转随 flatness 淡出
+    ctx.rotate(rotation * (1 - t));
+    drawCoinFace(ctx, size, vis);
+
+    // 厚度边（在空中→桌面过渡时还可见一点）
+    if (t < 0.6) {
+      const ev = 1 - t / 0.6;
+      ctx.strokeStyle = COIN_EDGE;
+      ctx.lineWidth = 4 * ev;
+      ctx.beginPath();
+      ctx.arc(0, 0, size, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else {
+    // 空中：画在屏幕坐标，有钱币自身旋转
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    const sqY = 0.06 + flatness * 0.94;
+    ctx.scale(1, sqY);
+    ctx.rotate(rotation);
+
+    // 边缘厚度
+    if (flatness < 0.80) {
+      const ev = 1 - flatness / 0.80;
+      ctx.strokeStyle = COIN_EDGE;
+      ctx.lineWidth = 5 * ev;
+      ctx.beginPath();
+      ctx.arc(0, 0, size, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(210, 180, 130, ${ev * 0.55})`;
+      ctx.lineWidth = 1.8 * ev;
+      ctx.beginPath();
+      ctx.arc(0, 0, size - 2, -0.2, Math.PI * 0.75);
+      ctx.stroke();
+    }
+
+    drawCoinFace(ctx, size, flatness);
+    ctx.restore();
+  }
 }
 
 // ---- 墨迹迸溅（斜二测桌面） ----
@@ -450,12 +483,11 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
   const activeLines = ACTIVE_LINES[phase];
   drawYaoPlaceholders(ctx, w, h, activeLines);
 
-  // ---- 墨（放在下面，更大） ----
+  // ---- 墨（放在画面下方，更大） ----
   if (phase !== "idle") {
-    // 墨滴落点：偏下、居中
-    const inkCY = h * 0.30; // 桌面深度坐标
-    const inkCX = w * 0.42; // 桌面水平坐标
-    const inkDesk = obl(inkCX, inkCY, 0);
+    // wy 越大越靠下，h*0.55 落在画面中下方
+    const inkCY = h * 0.55;
+    const inkCX = w * 0.42;
 
     let inkProgress = 0;
     if (phase === "breath") inkProgress = clamp(elapsedInPhase / 760, 0, 1) * 0.5;
@@ -496,7 +528,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, state: RenderState) {
       const rot = cp * Math.PI * 2.5;
 
       drawCoinShadow(ctx, c.wx, c.wy, wz);
-      drawCoin3D(ctx, p.x, p.y, rot, flatness);
+      drawCoin3D(ctx, c.wx, c.wy, wz, rot, flatness);
 
       if (cp > 0.82) {
         drawInkSplash(ctx, c.wx, c.wy, (cp - 0.82) / 0.18, c.seed);
