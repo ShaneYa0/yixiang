@@ -13,7 +13,12 @@ const links = [
 ];
 
 export async function Navbar() {
-  const user = await resolveAuthUser();
+  let user: Awaited<ReturnType<typeof resolveAuthUser>> = null;
+  try {
+    user = await resolveAuthUser();
+  } catch {
+    // 认证服务不可用时仍正常渲染，用户看到未登录状态
+  }
 
   return (
     <nav className="mx-auto flex max-w-5xl flex-col gap-4 px-5 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8">
